@@ -139,9 +139,15 @@ class BorderDetector:
 
     # ======================== 公开接口 ========================
 
-    def detect(self, video_path: Path) -> VideoInfo:
+    def detect(
+        self, video_path: Path, crop_result: Optional[CropResult] = None
+    ) -> VideoInfo:
         """
         传入视频路径，检测视频元数据与边框裁剪参数，返回 `VideoInfo`。
+
+        Args:
+            video_path: 视频文件路径。
+            crop_result: 可选的裁剪参数。若传入则跳过边框检测，直接使用该裁剪参数。
 
         内部根据视频时长自动选择采样策略：
         - 时长 < 2s：顺序解码全量帧后均匀采样
@@ -163,7 +169,9 @@ class BorderDetector:
                 raise ValueError(f"no video stream found: {video_path}")
 
             stream = container.streams.video[0]
-            audio_stream = container.streams.audio[0] if container.streams.audio else None
+            audio_stream = (
+                container.streams.audio[0] if container.streams.audio else None
+            )
 
             fps = self._resolve_video_fps(stream)
             duration = self._resolve_video_duration(container, stream)
@@ -178,29 +186,35 @@ class BorderDetector:
             width = int(stream.width)
             height = int(stream.height)
 
-            plan = self._compute_sample_plan(duration, fps)
-
-            strategy = "顺序解码" if duration < 2.0 else "seek跳帧"
-            logger.debug(
-                "视频信息: fps={:.1f}, duration={:.2f}s, 采样策略={}, 计划帧数={}",
-                fps,
-                duration,
-                strategy,
-                plan["num_frames"],
-            )
-
-            if duration < 2.0:
-                frames = self._sample_sequentially(
-                    container, stream, plan["num_frames"]
-                )
+            if crop_result is not None:
+                logger.debug("使用传入的裁剪参数，跳过边框检测: {}", crop_result)
+                detected_crop = crop_result
             else:
-                frames = self._sample_with_seek(container, stream, plan["timestamps"])
+                plan = self._compute_sample_plan(duration, fps)
 
-            logger.debug("实际采集帧数: {}/{}", len(frames), plan["num_frames"])
-            for frame in frames:
-                self._feed(frame)
+                strategy = "顺序解码" if duration < 2.0 else "seek跳帧"
+                logger.debug(
+                    "视频信息: fps={:.1f}, duration={:.2f}s, 采样策略={}, 计划帧数={}",
+                    fps,
+                    duration,
+                    strategy,
+                    plan["num_frames"],
+                )
 
-        crop_result = self._run_detection()
+                if duration < 2.0:
+                    frames = self._sample_sequentially(
+                        container, stream, plan["num_frames"]
+                    )
+                else:
+                    frames = self._sample_with_seek(
+                        container, stream, plan["timestamps"]
+                    )
+
+                logger.debug("实际采集帧数: {}/{}", len(frames), plan["num_frames"])
+                for frame in frames:
+                    self._feed(frame)
+
+                detected_crop = self._run_detection()
 
         return VideoInfo(
             width=width,
@@ -209,7 +223,7 @@ class BorderDetector:
             total_frames=total_frames,
             audio_sample_rate=audio_sample_rate,
             duration_second=duration,
-            crop_result=crop_result,
+            crop_result=detected_crop,
         )
 
     def preview(
@@ -792,6 +806,8 @@ if __name__ == "__main__":
     print(f"检测耗时: {time.time() - start_time:.2f} 秒")
 
     if info.crop_result is not None:
-        arr = detector.preview(Path(video_path), frame_index=0, crop_result=info.crop_result)
+        arr = detector.preview(
+            Path(video_path), frame_index=0, crop_result=info.crop_result
+        )
         Image.fromarray(arr).save("output.png")
         print("预览已保存到 output.png")
