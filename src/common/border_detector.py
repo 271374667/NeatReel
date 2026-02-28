@@ -26,6 +26,7 @@ from typing import Optional
 @dataclass
 class CropResult:
     """裁剪检测结果（坐标基于原始分辨率）"""
+
     x: int
     y: int
     width: int
@@ -98,7 +99,7 @@ class BorderDetector:
 
     # ======================== 公开接口 ========================
 
-    def detect(self, video_path: Path, rotate_90_clockwise: bool = False) -> CropResult:
+    def detect(self, video_path: Path) -> CropResult:
         """
         传入视频路径，自动完成采样与检测，返回裁剪参数。
 
@@ -110,28 +111,48 @@ class BorderDetector:
 
         with av.open(str(video_path)) as container:
             if not container.streams.video:
-                return CropResult(x=0, y=0, width=0, height=0, confidence=0.0, has_border=False)
+                return CropResult(
+                    x=0, y=0, width=0, height=0, confidence=0.0, has_border=False
+                )
 
             stream = container.streams.video[0]
             fps = self._resolve_video_fps(stream)
             duration = self._resolve_video_duration(container, stream)
             plan = self._compute_sample_plan(duration, fps)
 
-            rotate_graph = self._create_rotate_graph(stream) if rotate_90_clockwise else None
-
             if duration < 2.0:
                 frames = self._sample_sequentially(
-                    container, stream, plan["num_frames"], rotate_graph
+                    container, stream, plan["num_frames"]
                 )
             else:
-                frames = self._sample_with_seek(
-                    container, stream, plan["timestamps"], rotate_graph
-                )
+                frames = self._sample_with_seek(container, stream, plan["timestamps"])
 
             for frame in frames:
                 self._feed(frame)
 
         return self._run_detection()
+
+    def preview(
+        self, video_path: Path, frame_index: int, crop_result: CropResult
+    ) -> np.ndarray:
+        """
+        从视频中取出第 frame_index 帧（0-based），按 crop_result 裁剪后返回 RGB numpy 数组。
+        """
+        with av.open(str(video_path)) as container:
+            stream = container.streams.video[0]
+            idx = 0
+            for packet in container.demux(stream):
+                for frame in packet.decode():
+                    if idx == frame_index:
+                        arr = frame.to_ndarray(format="rgb24")
+                        if crop_result.has_border:
+                            arr = arr[
+                                crop_result.y : crop_result.y + crop_result.height,
+                                crop_result.x : crop_result.x + crop_result.width,
+                            ].copy()
+                        return arr
+                    idx += 1
+        raise ValueError(f"帧索引 {frame_index} 超出视频范围: {video_path}")
 
     # ======================== 采样策略 ========================
 
@@ -140,11 +161,10 @@ class BorderDetector:
         container: av.container.InputContainer,
         stream: av.video.stream.VideoStream,
         timestamps: list[float],
-        rotate_graph: Optional[dict],
     ) -> list[av.VideoFrame]:
         frames: list[av.VideoFrame] = []
         for ts in timestamps:
-            frame = self._seek_and_get_frame(container, stream, ts, rotate_graph)
+            frame = self._seek_and_get_frame(container, stream, ts)
             if frame is not None:
                 frames.append(frame)
         return frames
@@ -154,7 +174,6 @@ class BorderDetector:
         container: av.container.InputContainer,
         stream: av.video.stream.VideoStream,
         timestamp: float,
-        rotate_graph: Optional[dict],
     ) -> Optional[av.VideoFrame]:
         time_base = stream.time_base
         if time_base is None:
@@ -174,11 +193,7 @@ class BorderDetector:
                 decoded += 1
                 if decoded <= self.seek_skip_frames:
                     continue
-                result = self._apply_rotate_graph(frame, rotate_graph)
-                if result is not None:
-                    return result
-                if decoded >= max_frames:
-                    return None
+                return frame
             if decoded >= max_frames:
                 return None
 
@@ -189,14 +204,11 @@ class BorderDetector:
         container: av.container.InputContainer,
         stream: av.video.stream.VideoStream,
         num_frames: int,
-        rotate_graph: Optional[dict],
     ) -> list[av.VideoFrame]:
         all_frames: list[av.VideoFrame] = []
         for packet in container.demux(stream):
             for frame in packet.decode():
-                f = self._apply_rotate_graph(frame, rotate_graph)
-                if f is not None:
-                    all_frames.append(f)
+                all_frames.append(frame)
 
         if not all_frames:
             return []
@@ -244,7 +256,9 @@ class BorderDetector:
 
     def _run_detection(self) -> CropResult:
         if self._original_size is None:
-            return CropResult(x=0, y=0, width=0, height=0, confidence=0.0, has_border=False)
+            return CropResult(
+                x=0, y=0, width=0, height=0, confidence=0.0, has_border=False
+            )
 
         result = self._detect_by_motion()
         if result is not None:
@@ -252,9 +266,12 @@ class BorderDetector:
 
         ow, oh = self._original_size
         return CropResult(
-            x=0, y=0,
-            width=self._align2_down(ow), height=self._align2_down(oh),
-            confidence=0.0, has_border=False,
+            x=0,
+            y=0,
+            width=self._align2_down(ow),
+            height=self._align2_down(oh),
+            confidence=0.0,
+            has_border=False,
         )
 
     # ======================== 运动区域检测算法 ========================
@@ -365,30 +382,6 @@ class BorderDetector:
     # ======================== 通用辅助 ========================
 
     @staticmethod
-    def _apply_rotate_graph(
-        frame: av.VideoFrame,
-        rotate_graph: Optional[dict],
-    ) -> Optional[av.VideoFrame]:
-        if rotate_graph is None:
-            return frame
-        try:
-            rotate_graph["src"].push(frame)
-            return rotate_graph["sink"].pull()
-        except (av.error.FFmpegError, EOFError):
-            return None
-
-    @staticmethod
-    def _create_rotate_graph(stream: av.video.stream.VideoStream) -> dict:
-        graph = av.filter.Graph()
-        src = graph.add_buffer(template=stream)
-        transpose = graph.add("transpose", args="clock")
-        sink = graph.add("buffersink")
-        src.link_to(transpose)
-        transpose.link_to(sink)
-        graph.configure()
-        return {"graph": graph, "src": src, "sink": sink}
-
-    @staticmethod
     def _resolve_video_fps(stream: av.video.stream.VideoStream) -> float:
         if stream.average_rate is not None:
             return float(stream.average_rate)
@@ -430,15 +423,17 @@ class BorderDetector:
         if start >= end:
             start, end = 0.0, safe_duration
 
-        timestamps = [
-            start + i * (end - start) / max(n - 1, 1)
-            for i in range(n)
-        ]
+        timestamps = [start + i * (end - start) / max(n - 1, 1) for i in range(n)]
         return {"num_frames": n, "timestamps": timestamps}
 
     def _to_crop_result(
-        self, top: int, bottom: int, left: int, right: int,
-        conf: float, has_border: bool,
+        self,
+        top: int,
+        bottom: int,
+        left: int,
+        right: int,
+        conf: float,
+        has_border: bool,
     ) -> CropResult:
         ow, oh = self._original_size
 
@@ -466,8 +461,12 @@ class BorderDetector:
             conf = 0.0
 
         return CropResult(
-            x=ox, y=oy, width=cw, height=ch,
-            confidence=round(conf, 4), has_border=has_border,
+            x=ox,
+            y=oy,
+            width=cw,
+            height=ch,
+            confidence=round(conf, 4),
+            has_border=has_border,
         )
 
     def _compute_detect_size(self) -> None:
@@ -490,3 +489,19 @@ class BorderDetector:
     @staticmethod
     def _align2_down(v: int) -> int:
         return v - (v % 2)
+
+
+if __name__ == "__main__":
+    import time
+    from PIL import Image
+
+    start_time = time.time()
+    video_path = r"E:\load\python\Project\VideoFusion\测试\dy\4938d41224254f9f0ac996ea88814782.mp4"
+    detector = BorderDetector()
+    result = detector.detect(Path(video_path))
+    print(result)
+    print(f"检测耗时: {time.time() - start_time:.2f} 秒")
+
+    arr = detector.preview(Path(video_path), frame_index=0, crop_result=result)
+    Image.fromarray(arr).save("output.png")
+    print("预览已保存到 output.png")
