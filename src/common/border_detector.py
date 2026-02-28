@@ -77,6 +77,8 @@ class BorderDetector:
         scene_change_threshold: float = 60.0,
         # 有效变化区域占主体区域的最小比例
         min_change_coverage: float = 0.05,
+        # 是否启用自适应阈值（开启后 diff_threshold 作为下限兜底）
+        adaptive_threshold: bool = True,
     ):
         self.detect_short_edge = detect_short_edge
         self.min_border_ratio = min_border_ratio
@@ -86,6 +88,7 @@ class BorderDetector:
         self.min_region_ratio = min_region_ratio
         self.scene_change_threshold = scene_change_threshold
         self.min_change_coverage = min_change_coverage
+        self.adaptive_threshold = adaptive_threshold
 
         self._prev_gray: Optional[np.ndarray] = None
         self._accumulated: Optional[np.ndarray] = None  # 累积变化图 (bool)
@@ -145,7 +148,7 @@ class BorderDetector:
             ow, oh = self._original_size
             self._result = CropResult(
                 x=0, y=0,
-                width=_align2_down(ow), height=_align2_down(oh),
+                width=self._align2_down(ow), height=self._align2_down(oh),
                 confidence=0.0, has_border=False,
             )
 
@@ -193,8 +196,19 @@ class BorderDetector:
         # 高斯模糊降噪（等价于 cv2.GaussianBlur(gray, (5,5), 0)）
         blurred = gaussian_filter(avg_diff, sigma=1.0)
 
+        # 确定二值化阈值
+        if self.adaptive_threshold:
+            nonzero = blurred[blurred > 0.5]
+            if nonzero.size > 0:
+                threshold = float(np.percentile(nonzero, 85)) * 0.4
+                threshold = max(threshold, self.diff_threshold)
+            else:
+                threshold = self.diff_threshold
+        else:
+            threshold = self.diff_threshold
+
         # 二值化（等价于 cv2.threshold）
-        binary = blurred > self.diff_threshold
+        binary = blurred > threshold
 
         # 形态学开运算：去除孤立小噪点
         k = self.morph_kernel_size
@@ -210,22 +224,11 @@ class BorderDetector:
         if num_features == 0:
             return None
 
-        # 过滤小区域
+        # 过滤小区域（用 bincount 一次计算所有标签面积，避免逐标签全图扫描）
         min_area = int(dw * dh * self.min_region_ratio)
-        # 创建过滤后的 binary
-        filtered = np.zeros_like(binary)
-
-        for i in range(1, num_features + 1):
-            component = labeled == i
-            area = component.sum()
-            if area >= min_area:
-                # 对每个合格的连通域，填充其包围矩形
-                # （等价于你代码中的 cv2.rectangle ... -1）
-                rows = np.any(component, axis=1)
-                cols = np.any(component, axis=0)
-                rmin, rmax = np.where(rows)[0][[0, -1]]
-                cmin, cmax = np.where(cols)[0][[0, -1]]
-                filtered[rmin:rmax + 1, cmin:cmax + 1] = True
+        areas = np.bincount(labeled.ravel())
+        valid_labels = set(np.where(areas[1:] >= min_area)[0] + 1)
+        filtered = np.isin(labeled, list(valid_labels))
 
         if not filtered.any():
             return None
@@ -284,30 +287,29 @@ class BorderDetector:
         self, top: int, bottom: int, left: int, right: int,
         conf: float, has_border: bool,
     ) -> CropResult:
-        dw, dh = self._detect_size
         ow, oh = self._original_size
 
         if has_border:
             s = self._scale_factor
-            ox = _align2(int(round(left * s)))
-            oy = _align2(int(round(top * s)))
-            cw = _align2_down(int(round((right - left) * s)))
-            ch = _align2_down(int(round((bottom - top) * s)))
+            ox = self._align2(int(round(left * s)))
+            oy = self._align2(int(round(top * s)))
+            cw = self._align2_down(int(round((right - left) * s)))
+            ch = self._align2_down(int(round((bottom - top) * s)))
 
             ox = max(0, min(ox, ow - 2))
             oy = max(0, min(oy, oh - 2))
             cw = min(cw, ow - ox)
             ch = min(ch, oh - oy)
-            cw = _align2_down(cw)
-            ch = _align2_down(ch)
+            cw = self._align2_down(cw)
+            ch = self._align2_down(ch)
 
             if cw < ow * 0.15 or ch < oh * 0.15:
                 has_border = False
 
         if not has_border:
             ox, oy = 0, 0
-            cw = _align2_down(ow)
-            ch = _align2_down(oh)
+            cw = self._align2_down(ow)
+            ch = self._align2_down(oh)
             conf = 0.0
 
         return CropResult(
@@ -323,15 +325,15 @@ class BorderDetector:
             self._scale_factor = 1.0
         else:
             s = self.detect_short_edge / short
-            dw = max(2, _align2_down(int(round(ow * s))))
-            dh = max(2, _align2_down(int(round(oh * s))))
+            dw = max(2, self._align2_down(int(round(ow * s))))
+            dh = max(2, self._align2_down(int(round(oh * s))))
             self._detect_size = (dw, dh)
             self._scale_factor = 1.0 / s
 
+    @staticmethod
+    def _align2(v: int) -> int:
+        return v + (v % 2)
 
-def _align2(v: int) -> int:
-    return v + (v % 2)
-
-
-def _align2_down(v: int) -> int:
-    return v - (v % 2)
+    @staticmethod
+    def _align2_down(v: int) -> int:
+        return v - (v % 2)
