@@ -267,7 +267,7 @@ class BorderDetector:
         gray = small.to_ndarray(format="gray").astype(np.float32)
 
         if self._accumulated is None:
-            self._accumulated = np.zeros((dh, dw), dtype=np.float32)
+            self._accumulated = np.zeros((dh, dw), dtype=np.uint8)
 
         # 缓存灰度帧供空域分析
         self._sampled_grays.append(gray)
@@ -278,8 +278,33 @@ class BorderDetector:
             if mean_diff >= self.scene_change_threshold:
                 logger.debug("跳过场景切换帧 mean_diff={:.2f}", mean_diff)
             elif mean_diff > 0.3:
-                self._accumulated += diff
                 self._pair_count += 1
+                # 模仿旧算法：二值化 → 形态学 → 连通域 → 将合格连通域的 bounding rect 填入累积图
+                blurred = gaussian_filter(diff, sigma=1.0)
+                binary = blurred > self.diff_threshold
+
+                k = self.morph_kernel_size
+                struct = np.ones((k, k), dtype=bool)
+                binary = binary_opening(binary, structure=struct)
+                binary = binary_closing(binary, structure=struct)
+
+                labeled_frame, n_feat = label(binary)
+                if n_feat > 0:
+                    min_area = int(dw * dh * self.min_region_ratio)
+                    areas = np.bincount(labeled_frame.ravel())
+                    for lbl_idx in range(1, len(areas)):
+                        if areas[lbl_idx] < min_area:
+                            continue
+                        rows = np.any(labeled_frame == lbl_idx, axis=1)
+                        cols = np.any(labeled_frame == lbl_idx, axis=0)
+                        if not rows.any() or not cols.any():
+                            continue
+                        r_idx = np.where(rows)[0]
+                        c_idx = np.where(cols)[0]
+                        t, b = int(r_idx[0]), int(r_idx[-1]) + 1
+                        le, ri = int(c_idx[0]), int(c_idx[-1]) + 1
+                        # 将 bounding rect 区域填为 255
+                        self._accumulated[t:b, le:ri] = 255
 
         self._prev_gray = gray
 
@@ -331,8 +356,8 @@ class BorderDetector:
         """
         基于帧间差分的累积变化区域检测。
 
-
-        帧差分 → 高斯模糊 → 二值化 → 形态学开闭运算 → 连通域过滤 → 最大包围矩形
+        _feed 阶段已将每帧差分的合格连通域 bounding rect 填入累积图（0/255），
+        此处直接对累积图做连通域分析，取最大矩形。
         """
         dw, dh = self._detect_size
 
@@ -340,99 +365,55 @@ class BorderDetector:
             logger.debug("pair_count=0，无有效帧对，跳过运动检测")
             return None
 
-        # 归一化累积图
-        avg_diff = self._accumulated / self._pair_count
+        # 累积图已是 0/255 的 uint8，直接二值化
+        binary = self._accumulated > 0
 
-        # 高斯模糊降噪
-        blurred = gaussian_filter(avg_diff, sigma=1.0)
-
-        # 确定二值化阈值
-        if self.adaptive_threshold:
-            nonzero = blurred[blurred > 0.5]
-            if nonzero.size > 0:
-                threshold = float(np.percentile(nonzero, 85)) * 0.4
-                threshold = max(threshold, self.diff_threshold)
-            else:
-                threshold = self.diff_threshold
-            logger.debug("自适应阈值={:.3f}", threshold)
-        else:
-            threshold = self.diff_threshold
-            logger.debug("固定阈值={:.3f}", threshold)
-
-        # 二值化（等价于 cv2.threshold）
-        binary = blurred > threshold
-
-        # 形态学开运算：去除孤立小噪点
-        k = self.morph_kernel_size
-        struct = np.ones((k, k), dtype=bool)
-        binary = binary_opening(binary, structure=struct)
-
-        # 形态学闭运算：填充小洞
-        binary = binary_closing(binary, structure=struct)
+        if not binary.any():
+            logger.debug("累积图无变化区域")
+            return None
 
         # 连通域分析
         labeled, num_features = label(binary)
-        logger.debug("连通域数量: {}", num_features)
+        logger.debug("累积图连通域数量: {}", num_features)
 
         if num_features == 0:
-            logger.debug("无连通域，返回 None")
             return None
 
-        # 过滤小区域（用 bincount 一次计算所有标签面积，避免逐标签全图扫描）
-        min_area = int(dw * dh * self.min_region_ratio)
+        # 找最大连通域（按 bounding rect 面积）
         areas = np.bincount(labeled.ravel())
-        valid_labels = set(np.where(areas[1:] >= min_area)[0] + 1)
-        logger.debug(
-            "有效连通域数量: {}/{} (min_area={})",
-            len(valid_labels),
-            num_features,
-            min_area,
-        )
-        filtered = np.isin(labeled, list(valid_labels))
+        # areas[0] 是背景，跳过
+        max_area = 0
+        best_rect = None
+        for lbl_idx in range(1, len(areas)):
+            rows = np.any(labeled == lbl_idx, axis=1)
+            cols = np.any(labeled == lbl_idx, axis=0)
+            if not rows.any() or not cols.any():
+                continue
+            r_idx = np.where(rows)[0]
+            c_idx = np.where(cols)[0]
+            t, b = int(r_idx[0]), int(r_idx[-1]) + 1
+            le, ri = int(c_idx[0]), int(c_idx[-1]) + 1
+            rect_area = (b - t) * (ri - le)
+            if rect_area > max_area:
+                max_area = rect_area
+                best_rect = (t, b, le, ri)
 
-        if not filtered.any():
-            logger.debug("过滤后无有效区域")
+        if best_rect is None:
             return None
 
-        # 提取最大活动区域的包围矩形
-        rows_any = np.any(filtered, axis=1)
-        cols_any = np.any(filtered, axis=0)
-
-        if not rows_any.any() or not cols_any.any():
-            return None
-
-        row_indices = np.where(rows_any)[0]
-        col_indices = np.where(cols_any)[0]
-
-        top = int(row_indices[0])
-        bottom = int(row_indices[-1]) + 1
-        left = int(col_indices[0])
-        right = int(col_indices[-1]) + 1
-
-        # 计算置信度：活动区域占总面积的比例 + 边框/内容对比度
-        active_area = filtered.sum()
-        content_area = (bottom - top) * (right - left)
+        top, bottom, left, right = best_rect
         total_area = dh * dw
 
-        if content_area < total_area * 0.1:
+        if max_area < total_area * 0.1:
             logger.debug(
-                "活动区域太小 content_area={} < {:.0f}，可能是噪声",
-                content_area,
+                "最大变化区域太小 area={} < {:.0f}",
+                max_area,
                 total_area * 0.1,
             )
             return None
 
-        coverage = active_area / content_area
-        if coverage < self.min_change_coverage:
-            logger.debug(
-                "变化覆盖率太低 coverage={:.3f} < {}",
-                coverage,
-                self.min_change_coverage,
-            )
-            return None
-
-        border_ratio = 1.0 - (content_area / total_area)
-        conf = min(1.0, coverage * 2) * 0.5 + min(1.0, border_ratio * 5) * 0.5
+        border_ratio = 1.0 - (max_area / total_area)
+        conf = min(1.0, border_ratio * 5) * 0.8
 
         has_border = (
             top > dh * self.min_border_ratio
@@ -445,28 +426,19 @@ class BorderDetector:
             logger.debug(
                 "活动区域未超出边框阈值，判定为无边框 "
                 "top={} bottom={} left={} right={} dh={} dw={}",
-                top,
-                bottom,
-                left,
-                right,
-                dh,
-                dw,
+                top, bottom, left, right, dh, dw,
             )
             return None
 
         logger.debug(
             "检测到边框区域 top={} bottom={} left={} right={} conf={:.4f}",
-            top,
-            bottom,
-            left,
-            right,
-            conf,
+            top, bottom, left, right, conf,
         )
-        # 加安全边距
-        top = max(0, top - self.safety_margin)
-        bottom = min(dh, bottom + self.safety_margin)
-        left = max(0, left - self.safety_margin)
-        right = min(dw, right + self.safety_margin)
+        # 向内收缩安全边距
+        top = min(dh - 1, top + self.safety_margin)
+        bottom = max(0, bottom - self.safety_margin)
+        left = min(dw - 1, left + self.safety_margin)
+        right = max(0, right - self.safety_margin)
 
         return self._to_crop_result(top, bottom, left, right, conf, True)
 
@@ -737,7 +709,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     # video_path = r"E:\load\python\Project\VideoFusion\测试\dy\4938d41224254f9f0ac996ea88814782.mp4"
-    video_path = r"E:\load\python\Project\VideoFusion\测试\dy\8fd68ff8825a0de6aff59c482abe7147.mp4"
+    video_path = r"E:\load\python\Project\VideoFusion\测试\dy\b7bb97e21600b07f66c21e7932cb7550.mp4"
     detector = BorderDetector()
     result = detector.detect(Path(video_path))
     print(result)
