@@ -53,6 +53,28 @@ class CropResult:
         )
 
 
+@dataclass(frozen=True)
+class VideoInfo:
+    """视频基础元数据容器。
+
+    Attributes:
+        width: 视频帧宽度（像素）。
+        height: 视频帧高度（像素）。
+        fps: 帧率（每秒帧数）。
+        total_frames: 总帧数；当源信息缺失时可能为估算值。
+        audio_sample_rate: 音频采样率（Hz）；`-1` 表示无音频流。
+        duration_second: 视频时长（秒）。
+    """
+
+    width: int
+    height: int
+    fps: float
+    total_frames: int
+    audio_sample_rate: int
+    duration_second: float
+    crop_result: Optional[CropResult] = None
+
+
 class BorderDetector:
     """
     视频装饰边框检测器 v4
@@ -117,28 +139,45 @@ class BorderDetector:
 
     # ======================== 公开接口 ========================
 
-    def detect(self, video_path: Path) -> CropResult:
+    def detect(self, video_path: Path) -> VideoInfo:
         """
-        传入视频路径，自动完成采样与检测，返回裁剪参数。
+        传入视频路径，检测视频元数据与边框裁剪参数，返回 `VideoInfo`。
 
         内部根据视频时长自动选择采样策略：
         - 时长 < 2s：顺序解码全量帧后均匀采样
         - 时长 ≥ 2s：按均匀时间戳 seek 采样（5%~95% 区间）
+
+        Raises:
+            FileNotFoundError: 当输入文件不存在时抛出。
+            ValueError: 当文件中没有视频流时抛出。
         """
+        if not video_path.exists():
+            raise FileNotFoundError(f"video file not found: {video_path}")
+
         self._reset()
 
         logger.debug("开始边框检测: {}", video_path)
 
         with av.open(str(video_path)) as container:
             if not container.streams.video:
-                logger.debug("视频无视频流，跳过检测: {}", video_path)
-                return CropResult(
-                    x=0, y=0, width=0, height=0, confidence=0.0, has_border=False
-                )
+                raise ValueError(f"no video stream found: {video_path}")
 
             stream = container.streams.video[0]
+            audio_stream = container.streams.audio[0] if container.streams.audio else None
+
             fps = self._resolve_video_fps(stream)
             duration = self._resolve_video_duration(container, stream)
+            total_frames = self._resolve_total_frames(stream, fps, duration)
+
+            audio_sample_rate = -1
+            if audio_stream is not None:
+                audio_sample_rate = int(
+                    audio_stream.rate or audio_stream.codec_context.sample_rate or -1
+                )
+
+            width = int(stream.width)
+            height = int(stream.height)
+
             plan = self._compute_sample_plan(duration, fps)
 
             strategy = "顺序解码" if duration < 2.0 else "seek跳帧"
@@ -161,7 +200,17 @@ class BorderDetector:
             for frame in frames:
                 self._feed(frame)
 
-        return self._run_detection()
+        crop_result = self._run_detection()
+
+        return VideoInfo(
+            width=width,
+            height=height,
+            fps=fps,
+            total_frames=total_frames,
+            audio_sample_rate=audio_sample_rate,
+            duration_second=duration,
+            crop_result=crop_result,
+        )
 
     def preview(
         self, video_path: Path, frame_index: int, crop_result: CropResult
@@ -609,6 +658,18 @@ class BorderDetector:
     # ======================== 通用辅助 ========================
 
     @staticmethod
+    def _resolve_total_frames(
+        video_stream: av.video.stream.VideoStream,
+        fps: float,
+        duration_second: float,
+    ) -> int:
+        if video_stream.frames and video_stream.frames > 0:
+            return int(video_stream.frames)
+        if fps > 0 and duration_second > 0:
+            return int(round(fps * duration_second))
+        return 0
+
+    @staticmethod
     def _resolve_video_fps(stream: av.video.stream.VideoStream) -> float:
         if stream.average_rate is not None:
             return float(stream.average_rate)
@@ -726,10 +787,11 @@ if __name__ == "__main__":
     # video_path = r"E:\load\python\Project\VideoFusion\测试\dy\4938d41224254f9f0ac996ea88814782.mp4"
     video_path = r"E:\load\python\Project\VideoFusion\测试\dy\8fd68ff8825a0de6aff59c482abe7147.mp4"
     detector = BorderDetector()
-    result = detector.detect(Path(video_path))
-    print(result)
+    info = detector.detect(Path(video_path))
+    print(info)
     print(f"检测耗时: {time.time() - start_time:.2f} 秒")
 
-    arr = detector.preview(Path(video_path), frame_index=0, crop_result=result)
-    Image.fromarray(arr).save("output.png")
-    print("预览已保存到 output.png")
+    if info.crop_result is not None:
+        arr = detector.preview(Path(video_path), frame_index=0, crop_result=info.crop_result)
+        Image.fromarray(arr).save("output.png")
+        print("预览已保存到 output.png")
