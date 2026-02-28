@@ -404,11 +404,11 @@ class BorderDetector:
         top, bottom, left, right = best_rect
         total_area = dh * dw
 
-        if max_area < total_area * 0.1:
+        if max_area < total_area * 0.3:
             logger.debug(
                 "最大变化区域太小 area={} < {:.0f}",
                 max_area,
-                total_area * 0.1,
+                total_area * 0.3,
             )
             return None
 
@@ -426,13 +426,22 @@ class BorderDetector:
             logger.debug(
                 "活动区域未超出边框阈值，判定为无边框 "
                 "top={} bottom={} left={} right={} dh={} dw={}",
-                top, bottom, left, right, dh, dw,
+                top,
+                bottom,
+                left,
+                right,
+                dh,
+                dw,
             )
             return None
 
         logger.debug(
             "检测到边框区域 top={} bottom={} left={} right={} conf={:.4f}",
-            top, bottom, left, right, conf,
+            top,
+            bottom,
+            left,
+            right,
+            conf,
         )
         # 向内收缩安全边距
         top = min(dh - 1, top + self.safety_margin)
@@ -475,10 +484,14 @@ class BorderDetector:
         vote_ratio = count / len(rects)
 
         logger.debug(
-            "空域分析投票结果: top={} bottom={} left={} right={} "
-            "得票={}/{} ({:.1%})",
-            top, bottom, left, right,
-            count, len(rects), vote_ratio,
+            "空域分析投票结果: top={} bottom={} left={} right={} 得票={}/{} ({:.1%})",
+            top,
+            bottom,
+            left,
+            right,
+            count,
+            len(rects),
+            vote_ratio,
         )
 
         # 投票率太低说明帧间结果不一致，不可信
@@ -524,12 +537,14 @@ class BorderDetector:
         bright_th = self.spatial_border_max_brightness
 
         # 预检：图像边缘是否足够暗
-        edge_pixels = np.concatenate([
-            gray[0, :].ravel(),
-            gray[-1, :].ravel(),
-            gray[:, 0].ravel(),
-            gray[:, -1].ravel(),
-        ])
+        edge_pixels = np.concatenate(
+            [
+                gray[0, :].ravel(),
+                gray[-1, :].ravel(),
+                gray[:, 0].ravel(),
+                gray[:, -1].ravel(),
+            ]
+        )
         if np.median(edge_pixels) > self.spatial_edge_threshold:
             return None
 
@@ -709,7 +724,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     # video_path = r"E:\load\python\Project\VideoFusion\测试\dy\4938d41224254f9f0ac996ea88814782.mp4"
-    video_path = r"E:\load\python\Project\VideoFusion\测试\dy\b7bb97e21600b07f66c21e7932cb7550.mp4"
+    video_path = r"E:\load\python\Project\VideoFusion\测试\dy\8fd68ff8825a0de6aff59c482abe7147.mp4"
     detector = BorderDetector()
     result = detector.detect(Path(video_path))
     print(result)
