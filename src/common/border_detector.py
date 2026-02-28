@@ -1,7 +1,11 @@
 """
-视频装饰边框检测与裁剪模块 v4
+视频装饰边框检测与裁剪模块 v5
 
-核心算法：帧间差分累积变化区域 → 形态学去噪 → 最大活动矩形提取
+核心算法：
+  1. 时域：帧间差分累积变化区域 → 形态学去噪 → 最大活动矩形提取
+  2. 空域：单帧自适应阈值二值化 → 形态学去噪 → 最大轮廓矩形 → 多帧投票
+  两条路径互补：运动检测优先，空域分析兜底。
+
 使用 PyAV + NumPy + SciPy
 
 依赖：av, numpy, scipy, pathlib
@@ -9,6 +13,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 
 import av
@@ -80,6 +85,11 @@ class BorderDetector:
         adaptive_threshold: bool = True,
         # seek 后跳过的帧数（让画面定位更接近目标时刻）
         seek_skip_frames: int = 2,
+        # ---- 空域分析参数 ----
+        # 边缘暗度预检阈值：若四边中位亮度高于此值，认为无黑边
+        spatial_edge_threshold: float = 50.0,
+        # 黑边区域的最大亮度：像素亮于此值则认为是内容
+        spatial_border_max_brightness: float = 30.0,
     ):
         self.detect_short_edge = detect_short_edge
         self.min_border_ratio = min_border_ratio
@@ -92,12 +102,18 @@ class BorderDetector:
         self.adaptive_threshold = adaptive_threshold
         self.seek_skip_frames = seek_skip_frames
 
+        # 空域分析参数
+        self.spatial_edge_threshold = spatial_edge_threshold
+        self.spatial_border_max_brightness = spatial_border_max_brightness
+
         self._prev_gray: Optional[np.ndarray] = None
         self._accumulated: Optional[np.ndarray] = None
         self._pair_count: int = 0
         self._original_size: Optional[tuple[int, int]] = None
         self._detect_size: Optional[tuple[int, int]] = None
         self._scale_factor: float = 1.0
+        # 缓存采样帧的灰度图，供空域分析使用
+        self._sampled_grays: list[np.ndarray] = []
 
     # ======================== 公开接口 ========================
 
@@ -128,7 +144,10 @@ class BorderDetector:
             strategy = "顺序解码" if duration < 2.0 else "seek跳帧"
             logger.debug(
                 "视频信息: fps={:.1f}, duration={:.2f}s, 采样策略={}, 计划帧数={}",
-                fps, duration, strategy, plan["num_frames"],
+                fps,
+                duration,
+                strategy,
+                plan["num_frames"],
             )
 
             if duration < 2.0:
@@ -250,6 +269,9 @@ class BorderDetector:
         if self._accumulated is None:
             self._accumulated = np.zeros((dh, dw), dtype=np.float32)
 
+        # 缓存灰度帧供空域分析
+        self._sampled_grays.append(gray)
+
         if self._prev_gray is not None:
             diff = np.abs(gray - self._prev_gray)
             mean_diff = diff.mean()
@@ -268,6 +290,7 @@ class BorderDetector:
         self._original_size = None
         self._detect_size = None
         self._scale_factor = 1.0
+        self._sampled_grays = []
 
     def _run_detection(self) -> CropResult:
         if self._original_size is None:
@@ -276,17 +299,23 @@ class BorderDetector:
                 x=0, y=0, width=0, height=0, confidence=0.0, has_border=False
             )
 
-        logger.debug("开始运行检测算法，有效帧对数: {}", self._pair_count)
-        result = self._detect_by_motion()
-        if result is not None:
-            if result.has_border:
-                logger.info("检测完成，发现边框: {}", result)
-            else:
-                logger.debug("检测完成，未发现有效边框")
-            return result
-
         ow, oh = self._original_size
-        logger.debug("运动检测无结果，返回原始尺寸 {}x{}", ow, oh)
+
+        # —— 策略1：运动检测 ——
+        logger.debug("开始运行运动检测算法，有效帧对数: {}", self._pair_count)
+        motion_result = self._detect_by_motion()
+        if motion_result is not None and motion_result.has_border:
+            logger.info("运动检测发现边框: {}", motion_result)
+            return motion_result
+
+        # —— 策略2：空域分析兜底 ——
+        logger.debug("运动检测未发现有效边框，尝试空域分析")
+        spatial_result = self._detect_by_spatial()
+        if spatial_result is not None and spatial_result.has_border:
+            logger.info("空域分析发现边框: {}", spatial_result)
+            return spatial_result
+
+        logger.debug("两种策略均未发现边框，返回原始尺寸 {}x{}", ow, oh)
         return CropResult(
             x=0,
             y=0,
@@ -353,7 +382,12 @@ class BorderDetector:
         min_area = int(dw * dh * self.min_region_ratio)
         areas = np.bincount(labeled.ravel())
         valid_labels = set(np.where(areas[1:] >= min_area)[0] + 1)
-        logger.debug("有效连通域数量: {}/{} (min_area={})", len(valid_labels), num_features, min_area)
+        logger.debug(
+            "有效连通域数量: {}/{} (min_area={})",
+            len(valid_labels),
+            num_features,
+            min_area,
+        )
         filtered = np.isin(labeled, list(valid_labels))
 
         if not filtered.any():
@@ -380,10 +414,11 @@ class BorderDetector:
         content_area = (bottom - top) * (right - left)
         total_area = dh * dw
 
-        if content_area < total_area * 0.05:
+        if content_area < total_area * 0.1:
             logger.debug(
                 "活动区域太小 content_area={} < {:.0f}，可能是噪声",
-                content_area, total_area * 0.05,
+                content_area,
+                total_area * 0.1,
             )
             return None
 
@@ -391,7 +426,8 @@ class BorderDetector:
         if coverage < self.min_change_coverage:
             logger.debug(
                 "变化覆盖率太低 coverage={:.3f} < {}",
-                coverage, self.min_change_coverage,
+                coverage,
+                self.min_change_coverage,
             )
             return None
 
@@ -409,13 +445,22 @@ class BorderDetector:
             logger.debug(
                 "活动区域未超出边框阈值，判定为无边框 "
                 "top={} bottom={} left={} right={} dh={} dw={}",
-                top, bottom, left, right, dh, dw,
+                top,
+                bottom,
+                left,
+                right,
+                dh,
+                dw,
             )
             return None
 
         logger.debug(
             "检测到边框区域 top={} bottom={} left={} right={} conf={:.4f}",
-            top, bottom, left, right, conf,
+            top,
+            bottom,
+            left,
+            right,
+            conf,
         )
         # 加安全边距
         top = max(0, top - self.safety_margin)
@@ -424,6 +469,155 @@ class BorderDetector:
         right = min(dw, right + self.safety_margin)
 
         return self._to_crop_result(top, bottom, left, right, conf, True)
+
+    # ======================== 空域分析算法 ========================
+
+    def _detect_by_spatial(self) -> Optional[CropResult]:
+        """
+        基于全局亮度阈值的空域黑边检测。
+
+        对每帧：边缘暗度预检 → 全局亮度二值化 → 形态学开闭 → 内容区域 bounding box
+        对所有帧的矩形结果投票，取最频繁的裁剪区域。
+        适用于画面变化不大但有黑色/暗色边框的场景。
+        """
+        if not self._sampled_grays:
+            logger.debug("无缓存灰度帧，跳过空域分析")
+            return None
+
+        dw, dh = self._detect_size
+
+        rects: list[tuple[int, int, int, int]] = []
+
+        for gray in self._sampled_grays:
+            rect = self._analyze_single_frame_spatial(gray, dw, dh)
+            if rect is not None:
+                rects.append(rect)
+
+        if not rects:
+            logger.debug("空域分析：所有帧均未检测到有效矩形")
+            return None
+
+        # 投票取最频繁的矩形
+        most_common_rect, count = Counter(rects).most_common(1)[0]
+        top, bottom, left, right = most_common_rect
+        vote_ratio = count / len(rects)
+
+        logger.debug(
+            "空域分析投票结果: top={} bottom={} left={} right={} "
+            "得票={}/{} ({:.1%})",
+            top, bottom, left, right,
+            count, len(rects), vote_ratio,
+        )
+
+        # 投票率太低说明帧间结果不一致，不可信
+        if vote_ratio < 0.3:
+            logger.debug("空域分析投票率过低 {:.1%}，结果不可信", vote_ratio)
+            return None
+
+        # 检查是否真的存在边框
+        has_border = (
+            top > dh * self.min_border_ratio
+            or (dh - bottom) > dh * self.min_border_ratio
+            or left > dw * self.min_border_ratio
+            or (dw - right) > dw * self.min_border_ratio
+        )
+
+        if not has_border:
+            logger.debug("空域分析：活动区域未超出边框阈值")
+            return None
+
+        conf = min(1.0, vote_ratio) * 0.7
+
+        # 向内收缩安全边距，确保不残留黑边
+        top = min(dh - 1, top + self.safety_margin)
+        bottom = max(0, bottom - self.safety_margin)
+        left = min(dw - 1, left + self.safety_margin)
+        right = max(0, right - self.safety_margin)
+
+        return self._to_crop_result(top, bottom, left, right, conf, True)
+
+    def _analyze_single_frame_spatial(
+        self,
+        gray: np.ndarray,
+        dw: int,
+        dh: int,
+    ) -> Optional[tuple[int, int, int, int]]:
+        """
+        对单帧灰度图进行空域黑边检测，返回 (top, bottom, left, right) 或 None。
+
+        从画面中心向四周扫描：
+        - 用图像中心的窄带计算每行/列亮度，避免被垂直/水平方向黑边稀释
+        - 从中心向外扫描，遇到第一行/列均值低于黑边阈值即为边框起点
+        """
+        bright_th = self.spatial_border_max_brightness
+
+        # 预检：图像边缘是否足够暗
+        edge_pixels = np.concatenate([
+            gray[0, :].ravel(),
+            gray[-1, :].ravel(),
+            gray[:, 0].ravel(),
+            gray[:, -1].ravel(),
+        ])
+        if np.median(edge_pixels) > self.spatial_edge_threshold:
+            return None
+
+        cy, cx = dh // 2, dw // 2
+
+        # 取中心 10% 宽的水平窄带，计算每行的平均亮度
+        # 这样不受左右黑边影响
+        band_w = max(3, int(dw * 0.10))
+        h_left = max(0, cx - band_w // 2)
+        h_right = min(dw, cx + band_w // 2 + 1)
+        row_means = gray[:, h_left:h_right].mean(axis=1)  # shape: (dh,)
+
+        # 取中心 10% 高的垂直窄带，计算每列的平均亮度
+        # 这样不受上下黑边影响
+        band_h = max(3, int(dh * 0.10))
+        v_top = max(0, cy - band_h // 2)
+        v_bottom = min(dh, cy + band_h // 2 + 1)
+        col_means = gray[v_top:v_bottom, :].mean(axis=0)  # shape: (dw,)
+
+        # 确认中心确实是亮的（是内容区），否则无法从中心外扫
+        if row_means[cy] <= bright_th or col_means[cx] <= bright_th:
+            return None
+
+        # 从中心向上扫描，找到第一个暗行
+        top = 0
+        for i in range(cy, -1, -1):
+            if row_means[i] <= bright_th:
+                top = i + 1
+                break
+
+        # 从中心向下扫描
+        bottom = dh
+        for i in range(cy, dh):
+            if row_means[i] <= bright_th:
+                bottom = i
+                break
+
+        # 从中心向左扫描
+        left = 0
+        for i in range(cx, -1, -1):
+            if col_means[i] <= bright_th:
+                left = i + 1
+                break
+
+        # 从中心向右扫描
+        right = dw
+        for i in range(cx, dw):
+            if col_means[i] <= bright_th:
+                right = i
+                break
+
+        # 基本合法性检查
+        if top >= bottom or left >= right:
+            return None
+
+        content_area = (bottom - top) * (right - left)
+        if content_area < dh * dw * 0.1:
+            return None
+
+        return (top, bottom, left, right)
 
     # ======================== 通用辅助 ========================
 
