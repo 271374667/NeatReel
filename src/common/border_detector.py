@@ -1,13 +1,15 @@
 """
-视频装饰边框检测与裁剪模块 v3
+视频装饰边框检测与裁剪模块 v4
 
 核心算法：帧间差分累积变化区域 → 形态学去噪 → 最大活动矩形提取
-参考并优化自用户的 OpenCV 差值法实现，使用 PyAV + NumPy + SciPy 替代 OpenCV
+使用 PyAV + NumPy + SciPy
 
-依赖：av, numpy, scipy
+依赖：av, numpy, scipy, pathlib
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import av
 import numpy as np
@@ -45,21 +47,15 @@ class CropResult:
 
 class BorderDetector:
     """
-    视频装饰边框检测器 v3
+    视频装饰边框检测器 v4
 
-    算法流程：
-    1. 喂入采样帧（相邻帧对），累积帧间差分
-    2. 对累积变化图做形态学去噪（开运算+闭运算）
-    3. 连通域分析，过滤小区域噪声
-    4. 提取最大活动区域的包围矩形
+    传入视频路径，自动完成采样与检测，返回裁剪参数。
 
     用法:
         detector = BorderDetector()
-        for frame in sampled_frames:
-            detector.feed(frame)
-        result = detector.detect()
+        result = detector.detect(Path("video.mp4"))
         if result.has_border:
-            cropped = detector.crop(frame)
+            print(result.rect)
     """
 
     def __init__(
@@ -79,6 +75,8 @@ class BorderDetector:
         min_change_coverage: float = 0.05,
         # 是否启用自适应阈值（开启后 diff_threshold 作为下限兜底）
         adaptive_threshold: bool = True,
+        # seek 后跳过的帧数（让画面定位更接近目标时刻）
+        seek_skip_frames: int = 2,
     ):
         self.detect_short_edge = detect_short_edge
         self.min_border_ratio = min_border_ratio
@@ -89,24 +87,133 @@ class BorderDetector:
         self.scene_change_threshold = scene_change_threshold
         self.min_change_coverage = min_change_coverage
         self.adaptive_threshold = adaptive_threshold
+        self.seek_skip_frames = seek_skip_frames
 
         self._prev_gray: Optional[np.ndarray] = None
-        self._accumulated: Optional[np.ndarray] = None  # 累积变化图 (bool)
+        self._accumulated: Optional[np.ndarray] = None
         self._pair_count: int = 0
-        self._original_size: Optional[tuple[int, int]] = None  # (w, h)
+        self._original_size: Optional[tuple[int, int]] = None
         self._detect_size: Optional[tuple[int, int]] = None
         self._scale_factor: float = 1.0
-        self._result: Optional[CropResult] = None
 
     # ======================== 公开接口 ========================
 
-    def feed(self, frame: av.VideoFrame) -> None:
+    def detect(self, video_path: Path, rotate_90_clockwise: bool = False) -> CropResult:
         """
-        喂入一帧。内部自动与前一帧做差分并累积。
+        传入视频路径，自动完成采样与检测，返回裁剪参数。
 
-        建议按时间顺序喂入，相邻帧间隔 0.3~2 秒为佳。
-        对于长视频，均匀采样 20~60 帧足够。
+        内部根据视频时长自动选择采样策略：
+        - 时长 < 2s：顺序解码全量帧后均匀采样
+        - 时长 ≥ 2s：按均匀时间戳 seek 采样（5%~95% 区间）
         """
+        self._reset()
+
+        with av.open(str(video_path)) as container:
+            if not container.streams.video:
+                return CropResult(x=0, y=0, width=0, height=0, confidence=0.0, has_border=False)
+
+            stream = container.streams.video[0]
+            fps = self._resolve_video_fps(stream)
+            duration = self._resolve_video_duration(container, stream)
+            plan = self._compute_sample_plan(duration, fps)
+
+            rotate_graph = self._create_rotate_graph(stream) if rotate_90_clockwise else None
+
+            if duration < 2.0:
+                frames = self._sample_sequentially(
+                    container, stream, plan["num_frames"], rotate_graph
+                )
+            else:
+                frames = self._sample_with_seek(
+                    container, stream, plan["timestamps"], rotate_graph
+                )
+
+            for frame in frames:
+                self._feed(frame)
+
+        return self._run_detection()
+
+    # ======================== 采样策略 ========================
+
+    def _sample_with_seek(
+        self,
+        container: av.container.InputContainer,
+        stream: av.video.stream.VideoStream,
+        timestamps: list[float],
+        rotate_graph: Optional[dict],
+    ) -> list[av.VideoFrame]:
+        frames: list[av.VideoFrame] = []
+        for ts in timestamps:
+            frame = self._seek_and_get_frame(container, stream, ts, rotate_graph)
+            if frame is not None:
+                frames.append(frame)
+        return frames
+
+    def _seek_and_get_frame(
+        self,
+        container: av.container.InputContainer,
+        stream: av.video.stream.VideoStream,
+        timestamp: float,
+        rotate_graph: Optional[dict],
+    ) -> Optional[av.VideoFrame]:
+        time_base = stream.time_base
+        if time_base is None:
+            return None
+
+        seek_target = max(0, int(timestamp / float(time_base)))
+        try:
+            container.seek(seek_target, stream=stream, backward=True, any_frame=False)
+        except av.error.FFmpegError:
+            return None
+
+        decoded = 0
+        max_frames = self.seek_skip_frames + 12
+
+        for packet in container.demux(stream):
+            for frame in packet.decode():
+                decoded += 1
+                if decoded <= self.seek_skip_frames:
+                    continue
+                result = self._apply_rotate_graph(frame, rotate_graph)
+                if result is not None:
+                    return result
+                if decoded >= max_frames:
+                    return None
+            if decoded >= max_frames:
+                return None
+
+        return None
+
+    def _sample_sequentially(
+        self,
+        container: av.container.InputContainer,
+        stream: av.video.stream.VideoStream,
+        num_frames: int,
+        rotate_graph: Optional[dict],
+    ) -> list[av.VideoFrame]:
+        all_frames: list[av.VideoFrame] = []
+        for packet in container.demux(stream):
+            for frame in packet.decode():
+                f = self._apply_rotate_graph(frame, rotate_graph)
+                if f is not None:
+                    all_frames.append(f)
+
+        if not all_frames:
+            return []
+
+        total = len(all_frames)
+        if total <= num_frames:
+            return all_frames
+
+        indices = {
+            int(round(i * (total - 1) / max(num_frames - 1, 1)))
+            for i in range(num_frames)
+        }
+        return [all_frames[i] for i in sorted(indices)]
+
+    # ======================== 帧采集与状态管理 ========================
+
+    def _feed(self, frame: av.VideoFrame) -> None:
         if self._original_size is None:
             self._original_size = (frame.width, frame.height)
             self._compute_detect_size()
@@ -121,68 +228,42 @@ class BorderDetector:
         if self._prev_gray is not None:
             diff = np.abs(gray - self._prev_gray)
             mean_diff = diff.mean()
-
-            # 跳过场景切换帧
-            if mean_diff < self.scene_change_threshold:
-                # 跳过完全静止帧
-                if mean_diff > 0.3:
-                    self._accumulated += diff
-                    self._pair_count += 1
+            if mean_diff < self.scene_change_threshold and mean_diff > 0.3:
+                self._accumulated += diff
+                self._pair_count += 1
 
         self._prev_gray = gray
-        self._result = None
 
-    def detect(self) -> CropResult:
-        """执行检测，返回裁剪参数。"""
-        if self._result is not None:
-            return self._result
-
-        if self._accumulated is None:
-            raise RuntimeError("请先调用 feed() 喂入帧")
-
-        result_motion = self._detect_by_motion()
-
-        if result_motion is not None:
-            self._result = result_motion
-        else:
-            ow, oh = self._original_size
-            self._result = CropResult(
-                x=0, y=0,
-                width=self._align2_down(ow), height=self._align2_down(oh),
-                confidence=0.0, has_border=False,
-            )
-
-        return self._result
-
-    def crop(self, frame: av.VideoFrame) -> av.VideoFrame:
-        """对单帧应用裁剪。"""
-        r = self.detect()
-        if not r.has_border:
-            return frame
-        arr = frame.to_ndarray(format="rgb24")
-        cropped = arr[r.y: r.y + r.height, r.x: r.x + r.width].copy()
-        out = av.VideoFrame.from_ndarray(cropped, format="rgb24")
-        out.pts = frame.pts
-        out.time_base = frame.time_base
-        return out
-
-    def reset(self) -> None:
-        """重置状态，准备处理下一个视频。"""
+    def _reset(self) -> None:
         self._prev_gray = None
         self._accumulated = None
         self._pair_count = 0
         self._original_size = None
         self._detect_size = None
         self._scale_factor = 1.0
-        self._result = None
 
-    # ======================== 检测路径1：运动区域检测 ========================
+    def _run_detection(self) -> CropResult:
+        if self._original_size is None:
+            return CropResult(x=0, y=0, width=0, height=0, confidence=0.0, has_border=False)
+
+        result = self._detect_by_motion()
+        if result is not None:
+            return result
+
+        ow, oh = self._original_size
+        return CropResult(
+            x=0, y=0,
+            width=self._align2_down(ow), height=self._align2_down(oh),
+            confidence=0.0, has_border=False,
+        )
+
+    # ======================== 运动区域检测算法 ========================
 
     def _detect_by_motion(self) -> Optional[CropResult]:
         """
         基于帧间差分的累积变化区域检测。
 
-        等价于你原来的 OpenCV 版本：
+
         帧差分 → 高斯模糊 → 二值化 → 形态学开闭运算 → 连通域过滤 → 最大包围矩形
         """
         dw, dh = self._detect_size
@@ -282,6 +363,78 @@ class BorderDetector:
         return self._to_crop_result(top, bottom, left, right, conf, True)
 
     # ======================== 通用辅助 ========================
+
+    @staticmethod
+    def _apply_rotate_graph(
+        frame: av.VideoFrame,
+        rotate_graph: Optional[dict],
+    ) -> Optional[av.VideoFrame]:
+        if rotate_graph is None:
+            return frame
+        try:
+            rotate_graph["src"].push(frame)
+            return rotate_graph["sink"].pull()
+        except (av.error.FFmpegError, EOFError):
+            return None
+
+    @staticmethod
+    def _create_rotate_graph(stream: av.video.stream.VideoStream) -> dict:
+        graph = av.filter.Graph()
+        src = graph.add_buffer(template=stream)
+        transpose = graph.add("transpose", args="clock")
+        sink = graph.add("buffersink")
+        src.link_to(transpose)
+        transpose.link_to(sink)
+        graph.configure()
+        return {"graph": graph, "src": src, "sink": sink}
+
+    @staticmethod
+    def _resolve_video_fps(stream: av.video.stream.VideoStream) -> float:
+        if stream.average_rate is not None:
+            return float(stream.average_rate)
+        if stream.base_rate is not None:
+            return float(stream.base_rate)
+        return 0.0
+
+    @staticmethod
+    def _resolve_video_duration(
+        container: av.container.InputContainer,
+        stream: av.video.stream.VideoStream,
+    ) -> float:
+        if container.duration is not None:
+            return float(container.duration / av.time_base)
+        if stream.duration is not None and stream.time_base is not None:
+            return float(stream.duration * stream.time_base)
+        return 0.0
+
+    @staticmethod
+    def _compute_sample_plan(duration: float, fps: float) -> dict:
+        safe_duration = max(0.0, duration)
+        safe_fps = fps if fps > 0 else 30.0
+        total_frames = int(safe_duration * safe_fps)
+
+        if total_frames <= 1:
+            return {"num_frames": 1, "timestamps": [0.0]}
+
+        if safe_duration < 2.0:
+            n = min(total_frames, 10)
+        elif safe_duration < 30.0:
+            n = 10
+        elif safe_duration < 600.0:
+            n = 20
+        else:
+            n = 30
+
+        start = safe_duration * 0.05
+        end = safe_duration * 0.95
+        if start >= end:
+            start, end = 0.0, safe_duration
+
+        timestamps = [
+            start + i * (end - start) / max(n - 1, 1)
+            for i in range(n)
+        ]
+        return {"num_frames": n, "timestamps": timestamps}
 
     def _to_crop_result(
         self, top: int, bottom: int, left: int, right: int,
