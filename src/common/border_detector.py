@@ -22,6 +22,8 @@ from scipy.ndimage import (
 from dataclasses import dataclass
 from typing import Optional
 
+from loguru import logger
+
 
 @dataclass
 class CropResult:
@@ -109,8 +111,11 @@ class BorderDetector:
         """
         self._reset()
 
+        logger.debug("开始边框检测: {}", video_path)
+
         with av.open(str(video_path)) as container:
             if not container.streams.video:
+                logger.debug("视频无视频流，跳过检测: {}", video_path)
                 return CropResult(
                     x=0, y=0, width=0, height=0, confidence=0.0, has_border=False
                 )
@@ -120,6 +125,12 @@ class BorderDetector:
             duration = self._resolve_video_duration(container, stream)
             plan = self._compute_sample_plan(duration, fps)
 
+            strategy = "顺序解码" if duration < 2.0 else "seek跳帧"
+            logger.debug(
+                "视频信息: fps={:.1f}, duration={:.2f}s, 采样策略={}, 计划帧数={}",
+                fps, duration, strategy, plan["num_frames"],
+            )
+
             if duration < 2.0:
                 frames = self._sample_sequentially(
                     container, stream, plan["num_frames"]
@@ -127,6 +138,7 @@ class BorderDetector:
             else:
                 frames = self._sample_with_seek(container, stream, plan["timestamps"])
 
+            logger.debug("实际采集帧数: {}/{}", len(frames), plan["num_frames"])
             for frame in frames:
                 self._feed(frame)
 
@@ -182,7 +194,8 @@ class BorderDetector:
         seek_target = max(0, int(timestamp / float(time_base)))
         try:
             container.seek(seek_target, stream=stream, backward=True, any_frame=False)
-        except av.error.FFmpegError:
+        except av.error.FFmpegError as e:
+            logger.debug("seek 失败 ts={:.2f}s: {}", timestamp, e)
             return None
 
         decoded = 0
@@ -235,12 +248,14 @@ class BorderDetector:
         gray = small.to_ndarray(format="gray").astype(np.float32)
 
         if self._accumulated is None:
-            self._accumulated = np.zeros((dh, dw), dtype=np.float64)
+            self._accumulated = np.zeros((dh, dw), dtype=np.float32)
 
         if self._prev_gray is not None:
             diff = np.abs(gray - self._prev_gray)
             mean_diff = diff.mean()
-            if mean_diff < self.scene_change_threshold and mean_diff > 0.3:
+            if mean_diff >= self.scene_change_threshold:
+                logger.debug("跳过场景切换帧 mean_diff={:.2f}", mean_diff)
+            elif mean_diff > 0.3:
                 self._accumulated += diff
                 self._pair_count += 1
 
@@ -256,15 +271,22 @@ class BorderDetector:
 
     def _run_detection(self) -> CropResult:
         if self._original_size is None:
+            logger.debug("原始尺寸未初始化（未喂入任何帧），返回空结果")
             return CropResult(
                 x=0, y=0, width=0, height=0, confidence=0.0, has_border=False
             )
 
+        logger.debug("开始运行检测算法，有效帧对数: {}", self._pair_count)
         result = self._detect_by_motion()
         if result is not None:
+            if result.has_border:
+                logger.info("检测完成，发现边框: {}", result)
+            else:
+                logger.debug("检测完成，未发现有效边框")
             return result
 
         ow, oh = self._original_size
+        logger.debug("运动检测无结果，返回原始尺寸 {}x{}", ow, oh)
         return CropResult(
             x=0,
             y=0,
@@ -286,12 +308,13 @@ class BorderDetector:
         dw, dh = self._detect_size
 
         if self._pair_count == 0:
+            logger.debug("pair_count=0，无有效帧对，跳过运动检测")
             return None
 
         # 归一化累积图
         avg_diff = self._accumulated / self._pair_count
 
-        # 高斯模糊降噪（等价于 cv2.GaussianBlur(gray, (5,5), 0)）
+        # 高斯模糊降噪
         blurred = gaussian_filter(avg_diff, sigma=1.0)
 
         # 确定二值化阈值
@@ -302,8 +325,10 @@ class BorderDetector:
                 threshold = max(threshold, self.diff_threshold)
             else:
                 threshold = self.diff_threshold
+            logger.debug("自适应阈值={:.3f}", threshold)
         else:
             threshold = self.diff_threshold
+            logger.debug("固定阈值={:.3f}", threshold)
 
         # 二值化（等价于 cv2.threshold）
         binary = blurred > threshold
@@ -316,19 +341,23 @@ class BorderDetector:
         # 形态学闭运算：填充小洞
         binary = binary_closing(binary, structure=struct)
 
-        # 连通域分析（等价于 cv2.connectedComponentsWithStats）
+        # 连通域分析
         labeled, num_features = label(binary)
+        logger.debug("连通域数量: {}", num_features)
 
         if num_features == 0:
+            logger.debug("无连通域，返回 None")
             return None
 
         # 过滤小区域（用 bincount 一次计算所有标签面积，避免逐标签全图扫描）
         min_area = int(dw * dh * self.min_region_ratio)
         areas = np.bincount(labeled.ravel())
         valid_labels = set(np.where(areas[1:] >= min_area)[0] + 1)
+        logger.debug("有效连通域数量: {}/{} (min_area={})", len(valid_labels), num_features, min_area)
         filtered = np.isin(labeled, list(valid_labels))
 
         if not filtered.any():
+            logger.debug("过滤后无有效区域")
             return None
 
         # 提取最大活动区域的包围矩形
@@ -351,12 +380,20 @@ class BorderDetector:
         content_area = (bottom - top) * (right - left)
         total_area = dh * dw
 
-        if content_area < total_area * 0.1:
-            return None  # 活动区域太小，可能是噪声
+        if content_area < total_area * 0.05:
+            logger.debug(
+                "活动区域太小 content_area={} < {:.0f}，可能是噪声",
+                content_area, total_area * 0.05,
+            )
+            return None
 
         coverage = active_area / content_area
         if coverage < self.min_change_coverage:
-            return None  # 变化覆盖率太低
+            logger.debug(
+                "变化覆盖率太低 coverage={:.3f} < {}",
+                coverage, self.min_change_coverage,
+            )
+            return None
 
         border_ratio = 1.0 - (content_area / total_area)
         conf = min(1.0, coverage * 2) * 0.5 + min(1.0, border_ratio * 5) * 0.5
@@ -369,8 +406,17 @@ class BorderDetector:
         )
 
         if not has_border:
+            logger.debug(
+                "活动区域未超出边框阈值，判定为无边框 "
+                "top={} bottom={} left={} right={} dh={} dw={}",
+                top, bottom, left, right, dh, dw,
+            )
             return None
 
+        logger.debug(
+            "检测到边框区域 top={} bottom={} left={} right={} conf={:.4f}",
+            top, bottom, left, right, conf,
+        )
         # 加安全边距
         top = max(0, top - self.safety_margin)
         bottom = min(dh, bottom + self.safety_margin)
@@ -496,7 +542,8 @@ if __name__ == "__main__":
     from PIL import Image
 
     start_time = time.time()
-    video_path = r"E:\load\python\Project\VideoFusion\测试\dy\4938d41224254f9f0ac996ea88814782.mp4"
+    # video_path = r"E:\load\python\Project\VideoFusion\测试\dy\4938d41224254f9f0ac996ea88814782.mp4"
+    video_path = r"E:\load\python\Project\VideoFusion\测试\dy\8fd68ff8825a0de6aff59c482abe7147.mp4"
     detector = BorderDetector()
     result = detector.detect(Path(video_path))
     print(result)
