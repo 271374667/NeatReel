@@ -11,7 +11,8 @@ import av
 from PIL import Image
 from loguru import logger
 
-from src.common.border_detector import BorderDetector, CropResult
+from src.progress_reporter import ProgressReporter
+from src.common.video_info_reader import VideoInfoReader, CropResult
 from dataclasses import dataclass
 
 logger.remove()
@@ -53,6 +54,7 @@ class PyAVVideoMerger:
             raise ValueError("target_fps 必须是正整数")
         self.target_fps = target_fps
         self.enable_border_detection = enable_border_detection
+        self.progress_reporter = ProgressReporter(enable_tqdm=True)
 
     def merge(
         self,
@@ -227,6 +229,8 @@ class PyAVVideoMerger:
 
         video_pts_offset = 0
         audio_pts_offset = 0
+        reporter = self.progress_reporter
+        reporter.start_merge(total_files=len(input_files))
 
         try:
             for file_index, video_info in enumerate(input_files):
@@ -244,6 +248,29 @@ class PyAVVideoMerger:
                 except IndexError as exc:
                     input_container.close()
                     raise ValueError(f"文件缺少视频或音频流: {input_file}") from exc
+
+                estimated_total_frames = int(in_video.frames or 0)
+                if (
+                    estimated_total_frames <= 0
+                    and in_video.duration is not None
+                    and in_video.time_base is not None
+                ):
+                    duration_seconds = float(in_video.duration * in_video.time_base)
+                    stream_fps = float(
+                        in_video.average_rate or in_video.rate or effective_fps
+                    )
+                    if duration_seconds > 0 and stream_fps > 0:
+                        estimated_total_frames = int(
+                            max(1, round(duration_seconds * stream_fps))
+                        )
+
+                reporter.start_file(
+                    file_index=file_index + 1,
+                    file_path=input_file,
+                    total_frames=(
+                        estimated_total_frames if estimated_total_frames > 0 else None
+                    ),
+                )
 
                 filter_graph = self._build_filter_graph(
                     in_video, effective_rotation, crop_result,
@@ -285,6 +312,7 @@ class PyAVVideoMerger:
                 for packet in input_container.demux(in_video, in_audio):
                     if packet.stream.type == "video":
                         for frame in packet.decode():
+                            reporter.update_frame(1)
                             filter_graph["src"].push(frame)
                             while True:
                                 try:
@@ -315,6 +343,7 @@ class PyAVVideoMerger:
                 audio_pts_offset += segment_audio_sample_count
 
                 input_container.close()
+                reporter.finish_file()
                 logger.info(
                     f"完成，video offset -> {video_pts_offset}, "
                     f"audio offset -> {audio_pts_offset}"
@@ -329,14 +358,16 @@ class PyAVVideoMerger:
                 out_packet.stream = out_audio
                 output_container.mux(out_packet)
 
+            reporter.finish_merge()
             logger.info(f"完成! 输出文件: {output_file}")
         finally:
+            reporter.close()
             output_container.close()
 
     @staticmethod
     def _detect_border(input_file: Path) -> CropResult | None:
-        detector = BorderDetector()
-        video_info = detector.detect(input_file)
+        detector = VideoInfoReader()
+        video_info = detector.read_info(input_file)
         crop_result = video_info.crop_result
         if crop_result is not None and crop_result.has_border:
             logger.info(
@@ -452,5 +483,5 @@ if __name__ == "__main__":
         ],
         output_file=Path("output.mp4"),
         orientation=Orientation.VERTICAL,
-        # cover_image_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\l1.jpg"),
+        cover_image_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\l1.jpg"),
     )

@@ -75,15 +75,15 @@ class VideoInfo:
     crop_result: Optional[CropResult] = None
 
 
-class BorderDetector:
+class VideoInfoReader:
     """
     视频装饰边框检测器 v4
 
     传入视频路径，自动完成采样与检测，返回裁剪参数。
 
     用法:
-        detector = BorderDetector()
-        result = detector.detect(Path("video.mp4"))
+        detector = VideoInfoReader()
+        result = detector.read_info(Path("video.mp4"))
         if result.has_border:
             print(result.rect)
     """
@@ -139,7 +139,7 @@ class BorderDetector:
 
     # ======================== 公开接口 ========================
 
-    def detect(
+    def read_info(
         self, video_path: Path, crop_result: Optional[CropResult] = None
     ) -> VideoInfo:
         """
@@ -780,8 +780,8 @@ if __name__ == "__main__":
     start_time = time.time()
     # video_path = r"E:\load\python\Project\VideoFusion\测试\dy\4938d41224254f9f0ac996ea88814782.mp4"
     video_path = r"E:\load\python\Project\VideoFusion\测试\dy\8fd68ff8825a0de6aff59c482abe7147.mp4"
-    detector = BorderDetector()
-    info = detector.detect(Path(video_path))
+    detector = VideoInfoReader()
+    info = detector.read_info(Path(video_path))
     print(info)
     print(f"检测耗时: {time.time() - start_time:.2f} 秒")
 
