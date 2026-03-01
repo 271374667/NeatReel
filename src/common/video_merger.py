@@ -189,10 +189,13 @@ class VideoMerger:
         out_video.height = target_height
         out_video.pix_fmt = "yuv420p"
         out_video.time_base = video_time_base
+        out_video.thread_type = "AUTO"  # 编码端也启用多线程
         out_video.codec_context.options = {
             "preset": "ultrafast",
             "tune": "fastdecode",
             "bf": "0",
+            "crf": "18",
+            "threads": "0",  # 自动选择最优线程数
         }
 
         out_audio = output_container.add_stream("aac", rate=target_audio_rate)
@@ -462,7 +465,7 @@ class VideoMerger:
         # 4. 缩放 + 填充到目标尺寸
         scale = graph.add(
             "scale",
-            args=f"{target_width}:{target_height}:force_original_aspect_ratio=decrease",
+            args=f"{target_width}:{target_height}:force_original_aspect_ratio=decrease:flags=fast_bilinear",
         )
         last.link_to(scale)
         last = scale
