@@ -167,9 +167,26 @@ class PyAVVideoMerger:
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_container = av.open(str(output_file), mode="w")
 
-        out_video = None
-        out_audio = None
         audio_time_base = Fraction(1, target_audio_rate)
+
+        # 在 mux 任何 packet 之前，先把视频和音频两个输出流都注册好，
+        # 否则 MP4 muxer 在首次 mux() 时写入 header，
+        # 遗漏后续添加的 stream，导致输出文件损坏。
+        out_video = output_container.add_stream(
+            "libx264", rate=target_fps_fraction
+        )
+        out_video.width = target_width
+        out_video.height = target_height
+        out_video.pix_fmt = "yuv420p"
+        out_video.time_base = self.video_time_base
+        # 禁用 B-frames: 确保 DTS == PTS，避免跨片段拼接时
+        # B-frame 延迟导致 DTS 回退，MP4 muxer 报 EINVAL
+        out_video.options = {"bf": "0"}
+
+        out_audio = output_container.add_stream(
+            "aac", rate=target_audio_rate
+        )
+        out_audio.time_base = audio_time_base
 
         video_pts_offset = 0
         audio_pts_offset = 0
@@ -188,20 +205,6 @@ class PyAVVideoMerger:
                 except IndexError as exc:
                     input_container.close()
                     raise ValueError(f"文件缺少视频或音频流: {input_file}") from exc
-
-                if out_video is None:
-                    out_video = output_container.add_stream(
-                        "libx264", rate=target_fps_fraction
-                    )
-                    out_video.width = target_width
-                    out_video.height = target_height
-                    out_video.pix_fmt = "yuv420p"
-                    out_video.time_base = self.video_time_base
-
-                    out_audio = output_container.add_stream(
-                        "aac", rate=target_audio_rate
-                    )
-                    out_audio.time_base = audio_time_base
 
                 filter_graph = self._build_filter_graph(
                     in_video, effective_rotation, crop_result,
@@ -239,11 +242,11 @@ class PyAVVideoMerger:
                         out_packet.stream = out_audio
                         output_container.mux(out_packet)
 
+                # 单遍同时 demux 视频和音频，交错编码并 mux
                 for packet in input_container.demux(in_video, in_audio):
                     if packet.stream.type == "video":
                         for frame in packet.decode():
                             filter_graph["src"].push(frame)
-                            # fps 滤镜可能缓冲/丢弃帧，需循环拉取
                             while True:
                                 try:
                                     filtered_frame = filter_graph["sink"].pull()
@@ -278,18 +281,18 @@ class PyAVVideoMerger:
 
                 input_container.close()
                 print(
-                    f"  完成，video offset -> {video_pts_offset}, audio offset -> {audio_pts_offset}"
+                    f"  完成，video offset -> {video_pts_offset}, "
+                    f"audio offset -> {audio_pts_offset}"
                 )
 
-            if out_video is not None:
-                for out_packet in out_video.encode():
-                    out_packet.stream = out_video
-                    output_container.mux(out_packet)
+            # 刷新编码器缓冲区
+            for out_packet in out_video.encode():
+                out_packet.stream = out_video
+                output_container.mux(out_packet)
 
-            if out_audio is not None:
-                for out_packet in out_audio.encode():
-                    out_packet.stream = out_audio
-                    output_container.mux(out_packet)
+            for out_packet in out_audio.encode():
+                out_packet.stream = out_audio
+                output_container.mux(out_packet)
 
             print(f"完成! 输出文件: {output_file}")
         finally:
