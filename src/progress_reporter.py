@@ -83,7 +83,9 @@ class ProgressReporter:
         self.state.current_file_index = file_index
         self.state.current_file_path = str(file_path)
         self.state.current_frames = 0
-        self.state.total_frames = total_frames if total_frames and total_frames > 0 else None
+        self.state.total_frames = (
+            total_frames if total_frames and total_frames > 0 else None
+        )
         if self.enable_tqdm:
             self._frame_bar = tqdm(
                 total=self.state.total_frames,

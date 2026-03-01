@@ -44,7 +44,7 @@ class Rotation(Enum):
     NOTHING = 0
 
 
-class PyAVVideoMerger:
+class VideoMerger:
     def __init__(
         self,
         target_fps: int = 30,
@@ -148,9 +148,7 @@ class PyAVVideoMerger:
                 if source_fps_values
                 else self.target_fps
             )
-        target_audio_rate = (
-            max(source_audio_rates) if source_audio_rates else 44100
-        )
+        target_audio_rate = max(source_audio_rates) if source_audio_rates else 44100
         target_fps_fraction = Fraction(effective_fps, 1)
         # 使用编码器原生 time_base=1/fps，PTS 直接用帧序号（0,1,2,...）
         # 避免自定义 time_base 的截断误差导致 DTS 碰撞
@@ -186,18 +184,14 @@ class PyAVVideoMerger:
         # 在 mux 任何 packet 之前，先把视频和音频两个输出流都注册好，
         # 否则 MP4 muxer 在首次 mux() 时写入 header，
         # 遗漏后续添加的 stream，导致输出文件损坏。
-        out_video = output_container.add_stream(
-            "libx264", rate=target_fps_fraction
-        )
+        out_video = output_container.add_stream("libx264", rate=target_fps_fraction)
         out_video.width = target_width
         out_video.height = target_height
         out_video.pix_fmt = "yuv420p"
         out_video.time_base = video_time_base
         out_video.codec_context.options = {"bf": "0"}
 
-        out_audio = output_container.add_stream(
-            "aac", rate=target_audio_rate
-        )
+        out_audio = output_container.add_stream("aac", rate=target_audio_rate)
         out_audio.time_base = audio_time_base
 
         # ===== 封面流 =====
@@ -273,8 +267,12 @@ class PyAVVideoMerger:
                 )
 
                 filter_graph = self._build_filter_graph(
-                    in_video, effective_rotation, crop_result,
-                    target_width, target_height, effective_fps,
+                    in_video,
+                    effective_rotation,
+                    crop_result,
+                    target_width,
+                    target_height,
+                    effective_fps,
                 )
 
                 # 创建音频重采样器，统一采样率、采样格式和声道布局
@@ -474,14 +472,26 @@ class PyAVVideoMerger:
 
 
 if __name__ == "__main__":
-    merger = PyAVVideoMerger()
+    merger = VideoMerger()
     merger.merge(
         input_files=[
             # InputVideoInfo(file_path=Path(r"C:\Users\PythonImporter\Videos\Captures\1.mp4"), rotation=Rotation.CLOCKWISE),
-            InputVideoInfo(file_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\b1.mp4"), rotation=Rotation.CLOCKWISE),
-            InputVideoInfo(file_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\a1.mp4"), rotation=Rotation.CLOCKWISE),
+            InputVideoInfo(
+                file_path=Path(
+                    r"E:\load\python\Project\VideoFusion\测试\dy\b7bb97e21600b07f66c21e7932cb7550.mp4"
+                ),
+                rotation=Rotation.CLOCKWISE,
+            ),
+            InputVideoInfo(
+                file_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\a1.mp4"),
+                rotation=Rotation.CLOCKWISE,
+            ),
+            InputVideoInfo(
+                file_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\b1.mp4"),
+                rotation=Rotation.CLOCKWISE,
+            ),
         ],
         output_file=Path("output.mp4"),
-        orientation=Orientation.VERTICAL,
-        cover_image_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\l1.jpg"),
+        orientation=Orientation.HORIZONTAL,
+        cover_image_path=Path(r"F:\picture\R18\43759957_p0_master1200.jpg"),
     )

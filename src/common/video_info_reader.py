@@ -465,9 +465,7 @@ class VideoInfoReader:
         total_area = dh * dw
 
         if max_area < total_area * 0.3:
-            logger.debug(
-                f"最大变化区域太小 area={max_area} < {total_area * 0.3:.0f}"
-            )
+            logger.debug(f"最大变化区域太小 area={max_area} < {total_area * 0.3:.0f}")
             return None
 
         border_ratio = 1.0 - (max_area / total_area)
