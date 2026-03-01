@@ -189,7 +189,11 @@ class VideoMerger:
         out_video.height = target_height
         out_video.pix_fmt = "yuv420p"
         out_video.time_base = video_time_base
-        out_video.codec_context.options = {"bf": "0"}
+        out_video.codec_context.options = {
+            "preset": "ultrafast",
+            "tune": "fastdecode",
+            "bf": "0",
+        }
 
         out_audio = output_container.add_stream("aac", rate=target_audio_rate)
         out_audio.time_base = audio_time_base
@@ -242,6 +246,9 @@ class VideoMerger:
                 except IndexError as exc:
                     input_container.close()
                     raise ValueError(f"文件缺少视频或音频流: {input_file}") from exc
+
+                # 启用多线程解码，对高分辨率视频(1080p+)有显著加速
+                in_video.thread_type = "AUTO"
 
                 estimated_total_frames = int(in_video.frames or 0)
                 if (
@@ -339,7 +346,9 @@ class VideoMerger:
 
                 video_pts_offset += segment_video_frame_count
                 # 将 audio offset 同步到 video offset 的时间线，消除累积漂移
-                audio_pts_offset = int(video_pts_offset / effective_fps * target_audio_rate)
+                audio_pts_offset = int(
+                    video_pts_offset / effective_fps * target_audio_rate
+                )
 
                 input_container.close()
                 reporter.finish_file()
@@ -464,6 +473,11 @@ class VideoMerger:
         )
         last.link_to(pad)
         last = pad
+
+        # 显式指定像素格式，避免编码器隐式转换的额外开销
+        fmt = graph.add("format", args="pix_fmts=yuv420p")
+        last.link_to(fmt)
+        last = fmt
 
         sink = graph.add("buffersink")
         last.link_to(sink)
