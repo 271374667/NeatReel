@@ -8,6 +8,7 @@ from enum import Enum
 import sys
 
 import av
+import numpy as np
 from PIL import Image
 from loguru import logger
 
@@ -275,10 +276,16 @@ class VideoMerger:
 
                 try:
                     in_video = input_container.streams.video[0]
-                    in_audio = input_container.streams.audio[0]
                 except IndexError as exc:
                     input_container.close()
-                    raise ValueError(f"文件缺少视频或音频流: {input_file}") from exc
+                    raise ValueError(f"文件缺少视频流: {input_file}") from exc
+
+                # 音频流可选，缺失时后续会生成静音填充
+                try:
+                    in_audio = input_container.streams.audio[0]
+                except IndexError:
+                    in_audio = None
+                    logger.warning(f"文件缺少音频流，将填充静音: {input_file}")
 
                 # 多线程解码不影响画质，始终启用
                 in_video.thread_type = "AUTO"
@@ -348,7 +355,8 @@ class VideoMerger:
                         output_container.mux(out_packet)
 
                 # 单遍同时 demux 视频和音频，交错编码并 mux
-                for packet in input_container.demux(in_video, in_audio):
+                demux_streams = [in_video] + ([in_audio] if in_audio else [])
+                for packet in input_container.demux(*demux_streams):
                     if packet.stream.type == "video":
                         for frame in packet.decode():
                             reporter.update_frame(1)
@@ -377,6 +385,23 @@ class VideoMerger:
                 # 刷新音频重采样器中缓冲的剩余采样
                 for rf in resampler.resample(None):
                     _encode_audio_frame(rf)
+
+                # 如果该片段没有音频轨道，生成静音帧填充对应时长
+                if in_audio is None and segment_video_frame_count > 0:
+                    silence_duration = segment_video_frame_count / effective_fps
+                    silence_samples_needed = int(silence_duration * target_audio_rate)
+                    # 每次生成 1024 个采样的静音帧
+                    samples_per_frame = 1024
+
+                    while silence_samples_needed > 0:
+                        n = min(samples_per_frame, silence_samples_needed)
+                        silent_data = np.zeros((2, n), dtype="float32")
+                        silent_frame = av.AudioFrame.from_ndarray(
+                            silent_data, format="fltp", layout="stereo"
+                        )
+                        silent_frame.rate = target_audio_rate
+                        _encode_audio_frame(silent_frame)
+                        silence_samples_needed -= n
 
                 video_pts_offset += segment_video_frame_count
                 # 将 audio offset 同步到 video offset 的时间线，消除累积漂移
