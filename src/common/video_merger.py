@@ -44,16 +44,50 @@ class Rotation(Enum):
     NOTHING = 0
 
 
+class VideoProcessSpeed(Enum):
+    SLOW = 0
+    NORMAL = 1
+    FAST = 2
+
+
 class VideoMerger:
+    # 各速度级别的编码器配置
+    # 多线程不影响画质，所有级别均启用
+    # SLOW:   最慢速度，最高压缩率 → 最小体积，最佳画质
+    # NORMAL: 折中速度与体积，画质清晰
+    # FAST:   最快速度，最大体积，牺牲部分画质
+    _SPEED_CONFIGS: dict[VideoProcessSpeed, dict] = {
+        VideoProcessSpeed.SLOW: {
+            "codec_options": {"preset": "slow", "bf": "0", "crf": "18"},
+            "scale_flags": "bicubic",
+        },
+        VideoProcessSpeed.NORMAL: {
+            "codec_options": {"preset": "medium", "bf": "0", "crf": "20"},
+            "scale_flags": "bicubic",
+        },
+        VideoProcessSpeed.FAST: {
+            "codec_options": {
+                "preset": "ultrafast",
+                "tune": "fastdecode",
+                "bf": "0",
+                "crf": "23",
+                "threads": "0",
+            },
+            "scale_flags": "fast_bilinear",
+        },
+    }
+
     def __init__(
         self,
         target_fps: int = 30,
         enable_border_detection: bool = True,
+        speed: VideoProcessSpeed = VideoProcessSpeed.NORMAL,
     ) -> None:
         if target_fps <= 0:
             raise ValueError("target_fps 必须是正整数")
         self.target_fps = target_fps
         self.enable_border_detection = enable_border_detection
+        self.speed = speed
         self.progress_reporter = ProgressReporter(enable_tqdm=True)
 
     def merge(
@@ -184,19 +218,15 @@ class VideoMerger:
         # 在 mux 任何 packet 之前，先把视频和音频两个输出流都注册好，
         # 否则 MP4 muxer 在首次 mux() 时写入 header，
         # 遗漏后续添加的 stream，导致输出文件损坏。
+        speed_cfg = self._SPEED_CONFIGS[self.speed]
+
         out_video = output_container.add_stream("libx264", rate=target_fps_fraction)
         out_video.width = target_width
         out_video.height = target_height
         out_video.pix_fmt = "yuv420p"
         out_video.time_base = video_time_base
-        out_video.thread_type = "AUTO"  # 编码端也启用多线程
-        out_video.codec_context.options = {
-            "preset": "ultrafast",
-            "tune": "fastdecode",
-            "bf": "0",
-            "crf": "18",
-            "threads": "0",  # 自动选择最优线程数
-        }
+        out_video.thread_type = "AUTO"
+        out_video.codec_context.options = speed_cfg["codec_options"]
 
         out_audio = output_container.add_stream("aac", rate=target_audio_rate)
         out_audio.time_base = audio_time_base
@@ -250,7 +280,7 @@ class VideoMerger:
                     input_container.close()
                     raise ValueError(f"文件缺少视频或音频流: {input_file}") from exc
 
-                # 启用多线程解码，对高分辨率视频(1080p+)有显著加速
+                # 多线程解码不影响画质，始终启用
                 in_video.thread_type = "AUTO"
 
                 estimated_total_frames = int(in_video.frames or 0)
@@ -283,6 +313,7 @@ class VideoMerger:
                     target_width,
                     target_height,
                     effective_fps,
+                    speed_cfg["scale_flags"],
                 )
 
                 # 创建音频重采样器，统一采样率、采样格式和声道布局
@@ -424,6 +455,7 @@ class VideoMerger:
         target_width: int,
         target_height: int,
         target_fps: int | None = None,
+        scale_flags: str = "bicubic",
     ) -> dict[str, object]:
         """构建滤镜图: 裁剪 → 旋转 → 帧率转换 → 缩放+填充到目标尺寸。"""
         graph = av.filter.Graph()
@@ -465,7 +497,7 @@ class VideoMerger:
         # 4. 缩放 + 填充到目标尺寸
         scale = graph.add(
             "scale",
-            args=f"{target_width}:{target_height}:force_original_aspect_ratio=decrease:flags=fast_bilinear",
+            args=f"{target_width}:{target_height}:force_original_aspect_ratio=decrease:flags={scale_flags}",
         )
         last.link_to(scale)
         last = scale
@@ -490,7 +522,9 @@ class VideoMerger:
 
 
 if __name__ == "__main__":
-    merger = VideoMerger()
+    merger = VideoMerger(
+        speed=VideoProcessSpeed.FAST,
+    )
     merger.merge(
         input_files=[
             # InputVideoInfo(file_path=Path(r"C:\Users\PythonImporter\Videos\Captures\1.mp4"), rotation=Rotation.CLOCKWISE),
