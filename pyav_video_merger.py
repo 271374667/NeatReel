@@ -5,11 +5,22 @@ from pathlib import Path
 from typing import Sequence
 from collections import Counter
 from enum import Enum
+import sys
 
 import av
+from loguru import logger
 
 from src.common.border_detector import BorderDetector, CropResult
 from dataclasses import dataclass
+
+logger.remove()
+logger.add(
+    "log.log",
+    level="DEBUG",
+    encoding="utf-8",
+    enqueue=True,
+)
+logger.add(sys.stderr, level="INFO")
 
 
 @dataclass(frozen=True)
@@ -36,13 +47,11 @@ class PyAVVideoMerger:
     def __init__(
         self,
         target_fps: int = 30,
-        video_time_base: Fraction = Fraction(1, 90000),
         enable_border_detection: bool = True,
     ) -> None:
         if target_fps <= 0:
             raise ValueError("target_fps 必须是正整数")
         self.target_fps = target_fps
-        self.video_time_base = video_time_base
         self.enable_border_detection = enable_border_detection
 
     def merge(
@@ -140,10 +149,12 @@ class PyAVVideoMerger:
             max(source_audio_rates) if source_audio_rates else 44100
         )
         target_fps_fraction = Fraction(effective_fps, 1)
-        ticks_per_frame = int(self.video_time_base.denominator / effective_fps)
+        # 使用编码器原生 time_base=1/fps，PTS 直接用帧序号（0,1,2,...）
+        # 避免自定义 time_base 的截断误差导致 DTS 碰撞
+        video_time_base = Fraction(1, effective_fps)
 
-        print(f"目标帧率: {effective_fps} fps")
-        print(f"目标音频采样率: {target_audio_rate} Hz")
+        logger.info("目标帧率: {} fps", effective_fps)
+        logger.info("目标音频采样率: {} Hz", target_audio_rate)
 
         # ===== 确定目标分辨率 =====
         if target_resolution is not None:
@@ -161,7 +172,7 @@ class PyAVVideoMerger:
                 effective_dimensions
             )
 
-        print(f"目标分辨率: {target_width}x{target_height}")
+        logger.info("目标分辨率: {}x{}", target_width, target_height)
 
         # ===== 处理视频 =====
         output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -178,10 +189,8 @@ class PyAVVideoMerger:
         out_video.width = target_width
         out_video.height = target_height
         out_video.pix_fmt = "yuv420p"
-        out_video.time_base = self.video_time_base
-        # 禁用 B-frames: 确保 DTS == PTS，避免跨片段拼接时
-        # B-frame 延迟导致 DTS 回退，MP4 muxer 报 EINVAL
-        out_video.options = {"bf": "0"}
+        out_video.time_base = video_time_base
+        out_video.codec_context.options = {"bf": "0"}
 
         out_audio = output_container.add_stream(
             "aac", rate=target_audio_rate
@@ -196,7 +205,9 @@ class PyAVVideoMerger:
                 input_file = video_info.file_path
                 crop_result, effective_rotation = preprocessed[file_index]
 
-                print(f"处理文件 {file_index + 1}/{len(input_files)}: {input_file}")
+                logger.info(
+                    "处理文件 {}/{}: {}", file_index + 1, len(input_files), input_file
+                )
                 input_container = av.open(str(input_file))
 
                 try:
@@ -221,13 +232,9 @@ class PyAVVideoMerger:
 
                 def _encode_video_frame(frm):
                     nonlocal segment_video_frame_count
-                    new_pts = (
-                        video_pts_offset
-                        + segment_video_frame_count * ticks_per_frame
-                    )
+                    frm.pts = video_pts_offset + segment_video_frame_count
+                    frm.time_base = video_time_base
                     segment_video_frame_count += 1
-                    frm.pts = new_pts
-                    frm.time_base = self.video_time_base
                     for out_packet in out_video.encode(frm):
                         out_packet.stream = out_video
                         output_container.mux(out_packet)
@@ -276,13 +283,14 @@ class PyAVVideoMerger:
                     for rf in resampler.resample(None):
                         _encode_audio_frame(rf)
 
-                video_pts_offset += segment_video_frame_count * ticks_per_frame
+                video_pts_offset += segment_video_frame_count
                 audio_pts_offset += segment_audio_sample_count
 
                 input_container.close()
-                print(
-                    f"  完成，video offset -> {video_pts_offset}, "
-                    f"audio offset -> {audio_pts_offset}"
+                logger.info(
+                    "完成，video offset -> {}, audio offset -> {}",
+                    video_pts_offset,
+                    audio_pts_offset,
                 )
 
             # 刷新编码器缓冲区
@@ -294,7 +302,7 @@ class PyAVVideoMerger:
                 out_packet.stream = out_audio
                 output_container.mux(out_packet)
 
-            print(f"完成! 输出文件: {output_file}")
+            logger.info("完成! 输出文件: {}", output_file)
         finally:
             output_container.close()
 
@@ -304,11 +312,14 @@ class PyAVVideoMerger:
         video_info = detector.detect(input_file)
         crop_result = video_info.crop_result
         if crop_result is not None and crop_result.has_border:
-            print(
-                "  边框检测结果: "
-                f"has_border={crop_result.has_border}, "
-                f"rect=({crop_result.x},{crop_result.y},{crop_result.width},{crop_result.height}), "
-                f"confidence={crop_result.confidence:.4f}"
+            logger.info(
+                "边框检测结果: has_border={}, rect=({},{},{},{}), confidence={:.4f}",
+                crop_result.has_border,
+                crop_result.x,
+                crop_result.y,
+                crop_result.width,
+                crop_result.height,
+                crop_result.confidence,
             )
             return crop_result
         return None
