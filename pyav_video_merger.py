@@ -8,6 +8,7 @@ from enum import Enum
 import sys
 
 import av
+from PIL import Image
 from loguru import logger
 
 from src.common.border_detector import BorderDetector, CropResult
@@ -28,7 +29,6 @@ class InputVideoInfo:
     file_path: Path
     crop_result: CropResult | None = None
     rotation: Rotation | None = None
-    cover_image_path: Path | None = None
 
 
 class Orientation(Enum):
@@ -61,6 +61,7 @@ class PyAVVideoMerger:
         fps: int | None = None,
         orientation: Orientation = Orientation.VERTICAL,
         target_resolution: tuple[int, int] | None = None,
+        cover_image_path: Path | None = None,
     ) -> None:
         if not input_files:
             raise ValueError("input_files 不能为空")
@@ -153,8 +154,8 @@ class PyAVVideoMerger:
         # 避免自定义 time_base 的截断误差导致 DTS 碰撞
         video_time_base = Fraction(1, effective_fps)
 
-        logger.info("目标帧率: {} fps", effective_fps)
-        logger.info("目标音频采样率: {} Hz", target_audio_rate)
+        logger.info(f"目标帧率: {effective_fps} fps")
+        logger.info(f"目标音频采样率: {target_audio_rate} Hz")
 
         # ===== 确定目标分辨率 =====
         if target_resolution is not None:
@@ -172,7 +173,7 @@ class PyAVVideoMerger:
                 effective_dimensions
             )
 
-        logger.info("目标分辨率: {}x{}", target_width, target_height)
+        logger.info(f"目标分辨率: {target_width}x{target_height}")
 
         # ===== 处理视频 =====
         output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -197,6 +198,33 @@ class PyAVVideoMerger:
         )
         out_audio.time_base = audio_time_base
 
+        # ===== 封面流 =====
+        if cover_image_path is not None:
+            if not isinstance(cover_image_path, Path):
+                raise TypeError("cover_image_path 类型必须是 pathlib.Path 或 None")
+            if not cover_image_path.exists():
+                raise FileNotFoundError(f"封面图片不存在: {cover_image_path}")
+
+            img = Image.open(str(cover_image_path)).convert("RGB")
+            cover_stream = output_container.add_stream("mjpeg")
+            cover_stream.width = img.width
+            cover_stream.height = img.height
+            cover_stream.pix_fmt = "yuvj420p"
+            try:
+                cover_stream.disposition = 0x0400  # AV_DISPOSITION_ATTACHED_PIC
+            except (AttributeError, TypeError):
+                logger.warning("无法设置 attached_pic disposition")
+
+            cover_frame = av.VideoFrame.from_image(img).reformat(format="yuvj420p")
+            for pkt in cover_stream.encode(cover_frame):
+                pkt.stream = cover_stream
+                output_container.mux(pkt)
+            for pkt in cover_stream.encode():
+                pkt.stream = cover_stream
+                output_container.mux(pkt)
+
+            logger.info(f"已设置封面图片: {cover_image_path}")
+
         video_pts_offset = 0
         audio_pts_offset = 0
 
@@ -206,7 +234,7 @@ class PyAVVideoMerger:
                 crop_result, effective_rotation = preprocessed[file_index]
 
                 logger.info(
-                    "处理文件 {}/{}: {}", file_index + 1, len(input_files), input_file
+                    f"处理文件 {file_index + 1}/{len(input_files)}: {input_file}"
                 )
                 input_container = av.open(str(input_file))
 
@@ -288,9 +316,8 @@ class PyAVVideoMerger:
 
                 input_container.close()
                 logger.info(
-                    "完成，video offset -> {}, audio offset -> {}",
-                    video_pts_offset,
-                    audio_pts_offset,
+                    f"完成，video offset -> {video_pts_offset}, "
+                    f"audio offset -> {audio_pts_offset}"
                 )
 
             # 刷新编码器缓冲区
@@ -302,7 +329,7 @@ class PyAVVideoMerger:
                 out_packet.stream = out_audio
                 output_container.mux(out_packet)
 
-            logger.info("完成! 输出文件: {}", output_file)
+            logger.info(f"完成! 输出文件: {output_file}")
         finally:
             output_container.close()
 
@@ -313,13 +340,10 @@ class PyAVVideoMerger:
         crop_result = video_info.crop_result
         if crop_result is not None and crop_result.has_border:
             logger.info(
-                "边框检测结果: has_border={}, rect=({},{},{},{}), confidence={:.4f}",
-                crop_result.has_border,
-                crop_result.x,
-                crop_result.y,
-                crop_result.width,
-                crop_result.height,
-                crop_result.confidence,
+                f"边框检测结果: has_border={crop_result.has_border}, "
+                f"rect=({crop_result.x},{crop_result.y},"
+                f"{crop_result.width},{crop_result.height}), "
+                f"confidence={crop_result.confidence:.4f}"
             )
             return crop_result
         return None
@@ -423,9 +447,10 @@ if __name__ == "__main__":
     merger.merge(
         input_files=[
             # InputVideoInfo(file_path=Path(r"C:\Users\PythonImporter\Videos\Captures\1.mp4"), rotation=Rotation.CLOCKWISE),
-            InputVideoInfo(file_path=Path(r"E:\load\python\Project\VideoFusion\测试\dy\4938d41224254f9f0ac996ea88814782.mp4"), rotation=Rotation.CLOCKWISE),
+            InputVideoInfo(file_path=Path(r"E:\load\python\Project\VideoFusion\测试\dy\b7bb97e21600b07f66c21e7932cb7550.mp4"), rotation=Rotation.CLOCKWISE),
             InputVideoInfo(file_path=Path(r"E:\load\python\Project\VideoFusion\测试\dy\8fd68ff8825a0de6aff59c482abe7147.mp4"), rotation=Rotation.CLOCKWISE),
         ],
         output_file=Path("output.mp4"),
         orientation=Orientation.VERTICAL,
+        cover_image_path=Path(r"F:\picture\R18\7~TQB`B1I@RGU3PLS`OYW7S_tmb.jpg"),
     )

@@ -162,7 +162,7 @@ class BorderDetector:
 
         self._reset()
 
-        logger.debug("开始边框检测: {}", video_path)
+        logger.debug(f"开始边框检测: {video_path}")
 
         with av.open(str(video_path)) as container:
             if not container.streams.video:
@@ -187,18 +187,15 @@ class BorderDetector:
             height = int(stream.height)
 
             if crop_result is not None:
-                logger.debug("使用传入的裁剪参数，跳过边框检测: {}", crop_result)
+                logger.debug(f"使用传入的裁剪参数，跳过边框检测: {crop_result}")
                 detected_crop = crop_result
             else:
                 plan = self._compute_sample_plan(duration, fps)
 
                 strategy = "顺序解码" if duration < 2.0 else "seek跳帧"
                 logger.debug(
-                    "视频信息: fps={:.1f}, duration={:.2f}s, 采样策略={}, 计划帧数={}",
-                    fps,
-                    duration,
-                    strategy,
-                    plan["num_frames"],
+                    f"视频信息: fps={fps:.1f}, duration={duration:.2f}s, "
+                    f"采样策略={strategy}, 计划帧数={plan['num_frames']}"
                 )
 
                 if duration < 2.0:
@@ -210,7 +207,7 @@ class BorderDetector:
                         container, stream, plan["timestamps"]
                     )
 
-                logger.debug("实际采集帧数: {}/{}", len(frames), plan["num_frames"])
+                logger.debug(f"实际采集帧数: {len(frames)}/{plan['num_frames']}")
                 for frame in frames:
                     self._feed(frame)
 
@@ -277,7 +274,7 @@ class BorderDetector:
         try:
             container.seek(seek_target, stream=stream, backward=True, any_frame=False)
         except av.error.FFmpegError as e:
-            logger.debug("seek 失败 ts={:.2f}s: {}", timestamp, e)
+            logger.debug(f"seek 失败 ts={timestamp:.2f}s: {e}")
             return None
 
         decoded = 0
@@ -339,7 +336,7 @@ class BorderDetector:
             diff = np.abs(gray - self._prev_gray)
             mean_diff = diff.mean()
             if mean_diff >= self.scene_change_threshold:
-                logger.debug("跳过场景切换帧 mean_diff={:.2f}", mean_diff)
+                logger.debug(f"跳过场景切换帧 mean_diff={mean_diff:.2f}")
             elif mean_diff > 0.3:
                 self._pair_count += 1
                 # 模仿旧算法：二值化 → 形态学 → 连通域 → 将合格连通域的 bounding rect 填入累积图
@@ -390,20 +387,20 @@ class BorderDetector:
         ow, oh = self._original_size
 
         # —— 策略1：运动检测 ——
-        logger.debug("开始运行运动检测算法，有效帧对数: {}", self._pair_count)
+        logger.debug(f"开始运行运动检测算法，有效帧对数: {self._pair_count}")
         motion_result = self._detect_by_motion()
         if motion_result is not None and motion_result.has_border:
-            logger.info("运动检测发现边框: {}", motion_result)
+            logger.info(f"运动检测发现边框: {motion_result}")
             return motion_result
 
         # —— 策略2：空域分析兜底 ——
         logger.debug("运动检测未发现有效边框，尝试空域分析")
         spatial_result = self._detect_by_spatial()
         if spatial_result is not None and spatial_result.has_border:
-            logger.info("空域分析发现边框: {}", spatial_result)
+            logger.info(f"空域分析发现边框: {spatial_result}")
             return spatial_result
 
-        logger.debug("两种策略均未发现边框，返回原始尺寸 {}x{}", ow, oh)
+        logger.debug(f"两种策略均未发现边框，返回原始尺寸 {ow}x{oh}")
         return CropResult(
             x=0,
             y=0,
@@ -437,7 +434,7 @@ class BorderDetector:
 
         # 连通域分析
         labeled, num_features = label(binary)
-        logger.debug("累积图连通域数量: {}", num_features)
+        logger.debug(f"累积图连通域数量: {num_features}")
 
         if num_features == 0:
             return None
@@ -469,9 +466,7 @@ class BorderDetector:
 
         if max_area < total_area * 0.3:
             logger.debug(
-                "最大变化区域太小 area={} < {:.0f}",
-                max_area,
-                total_area * 0.3,
+                f"最大变化区域太小 area={max_area} < {total_area * 0.3:.0f}"
             )
             return None
 
@@ -488,23 +483,14 @@ class BorderDetector:
         if not has_border:
             logger.debug(
                 "活动区域未超出边框阈值，判定为无边框 "
-                "top={} bottom={} left={} right={} dh={} dw={}",
-                top,
-                bottom,
-                left,
-                right,
-                dh,
-                dw,
+                f"top={top} bottom={bottom} left={left} right={right} "
+                f"dh={dh} dw={dw}"
             )
             return None
 
         logger.debug(
-            "检测到边框区域 top={} bottom={} left={} right={} conf={:.4f}",
-            top,
-            bottom,
-            left,
-            right,
-            conf,
+            f"检测到边框区域 top={top} bottom={bottom} left={left} "
+            f"right={right} conf={conf:.4f}"
         )
         # 向内收缩安全边距
         top = min(dh - 1, top + self.safety_margin)
@@ -547,19 +533,13 @@ class BorderDetector:
         vote_ratio = count / len(rects)
 
         logger.debug(
-            "空域分析投票结果: top={} bottom={} left={} right={} 得票={}/{} ({:.1%})",
-            top,
-            bottom,
-            left,
-            right,
-            count,
-            len(rects),
-            vote_ratio,
+            f"空域分析投票结果: top={top} bottom={bottom} left={left} right={right} "
+            f"得票={count}/{len(rects)} ({vote_ratio:.1%})"
         )
 
         # 投票率太低说明帧间结果不一致，不可信
         if vote_ratio < 0.3:
-            logger.debug("空域分析投票率过低 {:.1%}，结果不可信", vote_ratio)
+            logger.debug(f"空域分析投票率过低 {vote_ratio:.1%}，结果不可信")
             return None
 
         # 检查是否真的存在边框
