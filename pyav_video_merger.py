@@ -250,10 +250,14 @@ class PyAVVideoMerger:
                     target_width, target_height, effective_fps,
                 )
 
-                # 创建音频重采样器（如果需要）
-                resampler = None
-                if in_audio.rate != target_audio_rate:
-                    resampler = av.AudioResampler(rate=target_audio_rate)
+                # 创建音频重采样器，统一采样率、采样格式和声道布局
+                # 即使采样率相同，不同视频文件的采样格式(s16/fltp/s32)或
+                # 声道布局(mono/stereo)可能不同，必须全部统一到 AAC 编码器期望的格式
+                resampler = av.AudioResampler(
+                    format="fltp",
+                    layout="stereo",
+                    rate=target_audio_rate,
+                )
 
                 segment_video_frame_count = 0
                 segment_audio_sample_count = 0
@@ -291,11 +295,8 @@ class PyAVVideoMerger:
 
                     elif packet.stream.type == "audio":
                         for frame in packet.decode():
-                            if resampler is not None:
-                                for rf in resampler.resample(frame):
-                                    _encode_audio_frame(rf)
-                            else:
-                                _encode_audio_frame(frame)
+                            for rf in resampler.resample(frame):
+                                _encode_audio_frame(rf)
 
                 # 刷新视频滤镜图中缓冲的剩余帧
                 filter_graph["src"].push(None)
@@ -307,9 +308,8 @@ class PyAVVideoMerger:
                     _encode_video_frame(filtered_frame)
 
                 # 刷新音频重采样器中缓冲的剩余采样
-                if resampler is not None:
-                    for rf in resampler.resample(None):
-                        _encode_audio_frame(rf)
+                for rf in resampler.resample(None):
+                    _encode_audio_frame(rf)
 
                 video_pts_offset += segment_video_frame_count
                 audio_pts_offset += segment_audio_sample_count
@@ -447,10 +447,10 @@ if __name__ == "__main__":
     merger.merge(
         input_files=[
             # InputVideoInfo(file_path=Path(r"C:\Users\PythonImporter\Videos\Captures\1.mp4"), rotation=Rotation.CLOCKWISE),
-            InputVideoInfo(file_path=Path(r"E:\load\python\Project\VideoFusion\测试\dy\b7bb97e21600b07f66c21e7932cb7550.mp4"), rotation=Rotation.CLOCKWISE),
-            InputVideoInfo(file_path=Path(r"E:\load\python\Project\VideoFusion\测试\dy\8fd68ff8825a0de6aff59c482abe7147.mp4"), rotation=Rotation.CLOCKWISE),
+            InputVideoInfo(file_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\b1.mp4"), rotation=Rotation.CLOCKWISE),
+            InputVideoInfo(file_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\a1.mp4"), rotation=Rotation.CLOCKWISE),
         ],
         output_file=Path("output.mp4"),
         orientation=Orientation.VERTICAL,
-        cover_image_path=Path(r"F:\picture\R18\7~TQB`B1I@RGU3PLS`OYW7S_tmb.jpg"),
+        # cover_image_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\l1.jpg"),
     )
