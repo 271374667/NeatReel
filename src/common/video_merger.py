@@ -338,7 +338,8 @@ class VideoMerger:
                     _encode_audio_frame(rf)
 
                 video_pts_offset += segment_video_frame_count
-                audio_pts_offset += segment_audio_sample_count
+                # 将 audio offset 同步到 video offset 的时间线，消除累积漂移
+                audio_pts_offset = int(video_pts_offset / effective_fps * target_audio_rate)
 
                 input_container.close()
                 reporter.finish_file()
