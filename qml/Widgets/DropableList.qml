@@ -1,6 +1,7 @@
-import QtQuick 2.15
+import QtQuick
 import QtQuick.Controls.FluentWinUI3
-import QtQuick.Layouts 1.15
+import QtQuick.Layouts
+import QtQuick.Dialogs
 
 Item {
     id: root
@@ -9,6 +10,11 @@ Item {
 
     // ── 公共属性 ──
     property int currentIndex: -1
+    property bool externalDragHover: false
+    property var supportedVideoExts: [
+        ".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".wmv", ".m4v",
+        ".mpg", ".mpeg", ".3gp", ".3g2", ".f4v", ".rm", ".rmvb", ".asf"
+    ]
 
     // ── 内联 ListModel，填充随机数据 ──
     ListModel {
@@ -136,6 +142,33 @@ Item {
             if (root.currentIndex >= videoModel.count) {
                 root.currentIndex = videoModel.count - 1;
             }
+        }
+    }
+
+    // ── 视频文件过滤 ──
+    function isVideoFile(filePath) {
+        var lowerPath = filePath.toString().toLowerCase();
+        for (var i = 0; i < supportedVideoExts.length; i++) {
+            if (lowerPath.endsWith(supportedVideoExts[i])) return true;
+        }
+        return false;
+    }
+
+    // ── 添加视频文件到列表末尾 ──
+    function addVideoFiles(urls) {
+        for (var i = 0; i < urls.length; i++) {
+            var urlStr = urls[i].toString();
+            if (!isVideoFile(urlStr)) continue;
+            var path = urlStr;
+            if (path.startsWith("file:///")) path = path.substring(8);
+            path = decodeURIComponent(path);
+            var parts = path.replace(/\\/g, "/").split("/");
+            var fName = parts[parts.length - 1];
+            videoModel.append({
+                fileName: fName,
+                filePath: path,
+                iconSource: "qrc:/icons/video"
+            });
         }
     }
 
@@ -569,6 +602,221 @@ Item {
                     emptySpaceMenu.popup();
                 }
             }
+        }
+
+        // ── 空列表占位提示 ──
+        Item {
+            id: emptyPlaceholder
+            anchors.fill: parent
+            anchors.margins: 16
+            visible: videoModel.count === 0 && !root.externalDragHover
+            z: 10
+
+            // 虚线边框
+            Canvas {
+                id: emptyBorderCanvas
+                anchors.fill: parent
+                onPaint: {
+                    var ctx = getContext("2d");
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.strokeStyle = "#c8c8c8";
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([6, 4]);
+                    var r = 8;
+                    ctx.beginPath();
+                    ctx.moveTo(r, 0.75);
+                    ctx.lineTo(width - r, 0.75);
+                    ctx.arcTo(width - 0.75, 0.75, width - 0.75, r, r);
+                    ctx.lineTo(width - 0.75, height - r);
+                    ctx.arcTo(width - 0.75, height - 0.75, width - r, height - 0.75, r);
+                    ctx.lineTo(r, height - 0.75);
+                    ctx.arcTo(0.75, height - 0.75, 0.75, height - r, r);
+                    ctx.lineTo(0.75, r);
+                    ctx.arcTo(0.75, 0.75, r, 0.75, r);
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+            }
+
+            Column {
+                anchors.centerIn: parent
+                spacing: 12
+
+                // 上传图标
+                Canvas {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 40; height: 40
+                    onPaint: {
+                        var ctx = getContext("2d");
+                        ctx.clearRect(0, 0, width, height);
+                        ctx.strokeStyle = "#b0b0b0";
+                        ctx.lineWidth = 1.8;
+                        ctx.lineCap = "round";
+                        ctx.lineJoin = "round";
+                        // 上箭头
+                        ctx.beginPath();
+                        ctx.moveTo(20, 28); ctx.lineTo(20, 12);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(13, 18); ctx.lineTo(20, 11); ctx.lineTo(27, 18);
+                        ctx.stroke();
+                        // 托盘
+                        ctx.beginPath();
+                        ctx.moveTo(8, 22); ctx.lineTo(8, 32);
+                        ctx.lineTo(32, 32); ctx.lineTo(32, 22);
+                        ctx.stroke();
+                    }
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "拖拽视频文件至此"
+                    color: "#999999"
+                    font.pixelSize: 14
+                    font.family: "Microsoft YaHei UI"
+                }
+
+                // 浏览文件按钮
+                Rectangle {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: browseLabel.width + 32
+                    height: 32
+                    radius: 4
+                    color: browseArea.containsMouse ? "#f0f0f0" : "transparent"
+                    border.color: "#d0d0d0"
+                    border.width: 1
+                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                    Text {
+                        id: browseLabel
+                        anchors.centerIn: parent
+                        text: "浏览文件"
+                        color: "#666666"
+                        font.pixelSize: 13
+                        font.family: "Microsoft YaHei UI"
+                    }
+
+                    MouseArea {
+                        id: browseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: fileDialog.open()
+                    }
+                }
+            }
+        }
+
+        // ── 外部文件拖放区域 ──
+        DropArea {
+            id: externalDropArea
+            anchors.fill: parent
+            z: 300
+
+            onEntered: {
+                root.externalDragHover = true;
+            }
+            onExited: {
+                root.externalDragHover = false;
+            }
+            onDropped: function(drop) {
+                root.externalDragHover = false;
+                if (drop.hasUrls) {
+                    root.addVideoFiles(drop.urls);
+                }
+                drop.accept();
+            }
+        }
+
+        // ── 拖放遮罩层（带动画） ──
+        Rectangle {
+            id: dropOverlay
+            anchors.fill: parent
+            radius: 8
+            color: "#dce8f8"
+            opacity: root.externalDragHover ? 0.94 : 0
+            visible: opacity > 0
+            z: 200
+
+            Behavior on opacity {
+                NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+            }
+
+            // 蓝色虚线边框
+            Canvas {
+                id: overlayBorderCanvas
+                anchors.fill: parent
+                anchors.margins: 14
+                onPaint: {
+                    var ctx = getContext("2d");
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.strokeStyle = "#0078D4";
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([8, 5]);
+                    var r = 8;
+                    ctx.beginPath();
+                    ctx.moveTo(r, 1);
+                    ctx.lineTo(width - r, 1);
+                    ctx.arcTo(width - 1, 1, width - 1, r, r);
+                    ctx.lineTo(width - 1, height - r);
+                    ctx.arcTo(width - 1, height - 1, width - r, height - 1, r);
+                    ctx.lineTo(r, height - 1);
+                    ctx.arcTo(1, height - 1, 1, height - r, r);
+                    ctx.lineTo(1, r);
+                    ctx.arcTo(1, 1, r, 1, r);
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+            }
+
+            Column {
+                anchors.centerIn: parent
+                spacing: 12
+
+                // 蓝色上传图标
+                Canvas {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 44; height: 44
+                    onPaint: {
+                        var ctx = getContext("2d");
+                        ctx.clearRect(0, 0, width, height);
+                        ctx.strokeStyle = "#0078D4";
+                        ctx.lineWidth = 2;
+                        ctx.lineCap = "round";
+                        ctx.lineJoin = "round";
+                        ctx.beginPath();
+                        ctx.moveTo(22, 30); ctx.lineTo(22, 12);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(15, 19); ctx.lineTo(22, 12); ctx.lineTo(29, 19);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(9, 24); ctx.lineTo(9, 35);
+                        ctx.lineTo(35, 35); ctx.lineTo(35, 24);
+                        ctx.stroke();
+                    }
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "松开以添加视频文件"
+                    color: "#0078D4"
+                    font.pixelSize: 15
+                    font.weight: Font.Medium
+                    font.family: "Microsoft YaHei UI"
+                }
+            }
+        }
+    }
+
+    // ── 文件选择对话框 ──
+    FileDialog {
+        id: fileDialog
+        title: "选择视频文件"
+        fileMode: FileDialog.OpenFiles
+        nameFilters: ["视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.flv *.wmv *.m4v *.mpg *.mpeg *.3gp *.3g2 *.f4v *.rm *.rmvb *.asf)", "所有文件 (*)"]
+        onAccepted: {
+            root.addVideoFiles(fileDialog.selectedFiles)
         }
     }
 
