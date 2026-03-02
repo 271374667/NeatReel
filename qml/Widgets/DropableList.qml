@@ -68,7 +68,6 @@ Item {
         indices.sort(function(a, b) { return b - a; });
         for (var i = 0; i < indices.length; i++) videoModel.remove(indices[i], 1);
         clearSelection();
-        emitAllData();
     }
     property bool externalDragHover: false
     property var supportedVideoExts: [
@@ -132,6 +131,9 @@ Item {
         }
         root.get_all_data(paths);
     }
+    function requestGetAllData() {
+        root.emitAllData();
+    }
 
     // ── 智能排序 ──
     function smartSort(ascending) {
@@ -185,7 +187,6 @@ Item {
             videoModel.append(items[j]);
         }
         root.clearSelection();
-        root.emitAllData();
     }
 
     // ── 置顶 ──
@@ -193,7 +194,6 @@ Item {
         if (idx > 0 && idx < videoModel.count) {
             videoModel.move(idx, 0, 1);
             root.selectOnly(0);
-            root.emitAllData();
         }
     }
 
@@ -202,7 +202,6 @@ Item {
         if (idx >= 0 && idx < videoModel.count - 1) {
             videoModel.move(idx, videoModel.count - 1, 1);
             root.selectOnly(videoModel.count - 1);
-            root.emitAllData();
         }
     }
 
@@ -211,7 +210,6 @@ Item {
         if (idx >= 0 && idx < videoModel.count) {
             videoModel.remove(idx, 1);
             clearSelection();
-            root.emitAllData();
         }
     }
 
@@ -240,7 +238,6 @@ Item {
                 iconSource: "qrc:/icons/video"
             });
         }
-        root.emitAllData();
     }
 
     // ── 拖拽状态管理 ──
@@ -589,7 +586,6 @@ Item {
                                 if (fromIdx !== toIdx && toIdx >= 0 && toIdx < videoModel.count) {
                                     videoModel.move(fromIdx, toIdx, 1);
                                     root.selectOnly(toIdx);
-                                    root.emitAllData();
                                 }
                             }
 
