@@ -1,5 +1,5 @@
 import QtQuick 2.15
-import QtQuick.Controls 2.15
+import QtQuick.Controls.FluentWinUI3
 import QtQuick.Layouts 1.15
 
 Item {
@@ -15,7 +15,7 @@ Item {
         id: videoModel
         ListElement {
             fileName: "示例视频_01.mp4"
-            filePath: "C:/Users/PythonImporter/Videos/Captures/示例视频_01.mp4"
+            filePath: "C:/Users/PythonImporter/Videos/Captures/示例视频 _01.mp4"
             iconSource: "qrc:/icons/video"
         }
         ListElement {
@@ -295,6 +295,23 @@ Item {
                             }
 
                             Item { Layout.fillHeight: true }  // 下方弹簧
+                        }
+                    }
+
+                    // ── 右上角序号标签 ──
+                    Text {
+                        anchors.top: parent.top
+                        anchors.right: parent.right
+                        anchors.topMargin: 4
+                        anchors.rightMargin: 8
+                        text: "#" + (delegateRoot.index + 1)
+                        font.pixelSize: 11
+                        font.family: "Microsoft YaHei UI"
+                        font.weight: Font.Normal
+                        color: delegateRoot.isSelected ? "#0078D4" : "#aaaaaa"
+                        opacity: delegateRoot.isBeingDragged ? 0.5 : 1.0
+                        Behavior on color {
+                            ColorAnimation { duration: 160 }
                         }
                     }
 
