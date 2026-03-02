@@ -7,6 +7,8 @@ Item {
     id: root
     width: 420
     height: 500
+    signal leftclicked(var data)
+    signal get_all_data(var paths)
 
     // ── 公共属性 ──
     property int currentIndex: -1
@@ -66,6 +68,7 @@ Item {
         indices.sort(function(a, b) { return b - a; });
         for (var i = 0; i < indices.length; i++) videoModel.remove(indices[i], 1);
         clearSelection();
+        emitAllData();
     }
     property bool externalDragHover: false
     property var supportedVideoExts: [
@@ -122,6 +125,14 @@ Item {
         return path.substring(0, headLen) + "..." + path.substring(path.length - tailLen);
     }
 
+    function emitAllData() {
+        var paths = [];
+        for (var i = 0; i < videoModel.count; i++) {
+            paths.push(videoModel.get(i).filePath);
+        }
+        root.get_all_data(paths);
+    }
+
     // ── 智能排序 ──
     function smartSort(ascending) {
         var count = videoModel.count;
@@ -174,6 +185,7 @@ Item {
             videoModel.append(items[j]);
         }
         root.clearSelection();
+        root.emitAllData();
     }
 
     // ── 置顶 ──
@@ -181,6 +193,7 @@ Item {
         if (idx > 0 && idx < videoModel.count) {
             videoModel.move(idx, 0, 1);
             root.selectOnly(0);
+            root.emitAllData();
         }
     }
 
@@ -189,6 +202,7 @@ Item {
         if (idx >= 0 && idx < videoModel.count - 1) {
             videoModel.move(idx, videoModel.count - 1, 1);
             root.selectOnly(videoModel.count - 1);
+            root.emitAllData();
         }
     }
 
@@ -197,6 +211,7 @@ Item {
         if (idx >= 0 && idx < videoModel.count) {
             videoModel.remove(idx, 1);
             clearSelection();
+            root.emitAllData();
         }
     }
 
@@ -225,6 +240,7 @@ Item {
                 iconSource: "qrc:/icons/video"
             });
         }
+        root.emitAllData();
     }
 
     // ── 拖拽状态管理 ──
@@ -250,7 +266,9 @@ Item {
             if (event.key === Qt.Key_A && (event.modifiers & Qt.ControlModifier)) {
                 root.selectAll();
                 event.accepted = true;
-            } else if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace) {
+            } else if (event.key === Qt.Key_Delete
+                       || event.key === Qt.Key_Backspace
+                       || (event.key === Qt.Key_D && (event.modifiers & Qt.ControlModifier))) {
                 if (root.getSelectedCount() > 0) {
                     root.removeSelectedItems();
                     event.accepted = true;
@@ -518,6 +536,9 @@ Item {
                                 root.rangeSelect(delegateRoot.index);
                             } else {
                                 root.selectOnly(delegateRoot.index);
+                                if (mouse.button === Qt.LeftButton && mouse.modifiers === Qt.NoModifier) {
+                                    root.leftclicked({ "filePath": delegateRoot.filePath });
+                                }
                             }
                             mainContainer.forceActiveFocus();
                         }
@@ -568,6 +589,7 @@ Item {
                                 if (fromIdx !== toIdx && toIdx >= 0 && toIdx < videoModel.count) {
                                     videoModel.move(fromIdx, toIdx, 1);
                                     root.selectOnly(toIdx);
+                                    root.emitAllData();
                                 }
                             }
 
