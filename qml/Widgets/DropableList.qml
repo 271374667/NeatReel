@@ -685,7 +685,6 @@ Item {
                     color: browseArea.containsMouse ? "#f0f0f0" : "transparent"
                     border.color: "#d0d0d0"
                     border.width: 1
-                    Behavior on color { ColorAnimation { duration: 120 } }
 
                     Text {
                         id: browseLabel
