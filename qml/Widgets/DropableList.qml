@@ -59,6 +59,86 @@ Item {
         return path.substring(0, headLen) + "..." + path.substring(path.length - tailLen);
     }
 
+    // ── 智能排序 ──
+    function smartSort(ascending) {
+        var count = videoModel.count;
+        if (count <= 1) return;
+
+        // 提取所有项目
+        var items = [];
+        for (var i = 0; i < count; i++) {
+            var it = videoModel.get(i);
+            items.push({ fileName: it.fileName, filePath: it.filePath, iconSource: it.iconSource });
+        }
+
+        var names = items.map(function(x) { return x.fileName; });
+
+        // Windows 重命名模式: e.g. "文件 (1).mp4", "文件 (20).mp4"
+        var winRenameRe = /\((\d+)\)/;
+        // 日期模式: e.g. "20260101", "2026-01-01", "2026_01_01"
+        var dateRe = /(\d{4})[-_.]?(\d{1,2})[-_.]?(\d{1,2})/;
+
+        var compareFn;
+
+        if (names.every(function(n) { return /^\d+$/.test(n); })) {
+            // 全部为纯数字
+            compareFn = function(a, b) { return parseInt(a.fileName) - parseInt(b.fileName); };
+        } else if (names.every(function(n) { return winRenameRe.test(n); })) {
+            // 全部符合 Windows 重命名规则
+            compareFn = function(a, b) {
+                return parseInt(a.fileName.match(winRenameRe)[1]) - parseInt(b.fileName.match(winRenameRe)[1]);
+            };
+        } else if (names.every(function(n) { return dateRe.test(n); })) {
+            // 全部包含日期
+            compareFn = function(a, b) {
+                var mA = a.fileName.match(dateRe);
+                var mB = b.fileName.match(dateRe);
+                var valA = parseInt(mA[1]) * 10000 + parseInt(mA[2]) * 100 + parseInt(mA[3]);
+                var valB = parseInt(mB[1]) * 10000 + parseInt(mB[2]) * 100 + parseInt(mB[3]);
+                return valA - valB;
+            };
+        } else {
+            // 默认按字符串排序
+            compareFn = function(a, b) { return a.fileName.localeCompare(b.fileName); };
+        }
+
+        items.sort(compareFn);
+        if (!ascending) items.reverse();
+
+        // 重建 model
+        videoModel.clear();
+        for (var j = 0; j < items.length; j++) {
+            videoModel.append(items[j]);
+        }
+        root.currentIndex = -1;
+    }
+
+    // ── 置顶 ──
+    function moveItemToTop(idx) {
+        if (idx > 0 && idx < videoModel.count) {
+            videoModel.move(idx, 0, 1);
+            root.currentIndex = 0;
+        }
+    }
+
+    // ── 置底 ──
+    function moveItemToBottom(idx) {
+        if (idx >= 0 && idx < videoModel.count - 1) {
+            videoModel.move(idx, videoModel.count - 1, 1);
+            root.currentIndex = videoModel.count - 1;
+        }
+    }
+
+    // ── 删除 ──
+    function removeItem(idx) {
+        if (idx >= 0 && idx < videoModel.count) {
+            videoModel.remove(idx, 1);
+            if (root.currentIndex >= videoModel.count) {
+                root.currentIndex = videoModel.count - 1;
+            }
+        }
+    }
+
     // ── 拖拽状态管理 ──
     QtObject {
         id: dragState
@@ -446,6 +526,48 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
                 anchors.rightMargin: -3
+            }
+        }
+
+        // ── 右键菜单（空白区域） ──
+        Menu {
+            id: emptySpaceMenu
+            MenuItem { text: "智能升序"; onTriggered: root.smartSort(true) }
+            MenuItem { text: "智能降序"; onTriggered: root.smartSort(false) }
+        }
+
+        // ── 右键菜单（点击项目） ──
+        Menu {
+            id: itemContextMenu
+            property int targetIndex: -1
+            MenuItem { text: "智能升序"; onTriggered: root.smartSort(true) }
+            MenuItem { text: "智能降序"; onTriggered: root.smartSort(false) }
+            MenuSeparator {}
+            MenuItem { text: "置顶"; onTriggered: root.moveItemToTop(itemContextMenu.targetIndex) }
+            MenuItem { text: "置底"; onTriggered: root.moveItemToBottom(itemContextMenu.targetIndex) }
+            MenuSeparator {}
+            MenuItem {
+                text: "删除"
+                onTriggered: root.removeItem(itemContextMenu.targetIndex)
+            }
+        }
+
+        // ── 右键菜单触发区域 ──
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.RightButton
+
+            onClicked: function(mouse) {
+                var posInContent = mapToItem(listView.contentItem, mouse.x, mouse.y);
+                var clickedIndex = listView.indexAt(posInContent.x, posInContent.y);
+
+                if (clickedIndex >= 0) {
+                    root.currentIndex = clickedIndex;
+                    itemContextMenu.targetIndex = clickedIndex;
+                    itemContextMenu.popup();
+                } else {
+                    emptySpaceMenu.popup();
+                }
             }
         }
     }
