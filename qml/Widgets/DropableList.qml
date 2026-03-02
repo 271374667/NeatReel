@@ -66,6 +66,9 @@ Item {
         property bool isDragging: false
         property real dragMouseY: 0         // 鼠标在列表坐标系中的 Y
         property int dropTargetIndex: -1    // 放下目标位置
+        property real dragMouseRootX: 0     // 鼠标在根坐标系中的 X
+        property real dragMouseRootY: 0     // 鼠标在根坐标系中的 Y
+        property string draggedFileName: "" // 被拖拽项的文件名
     }
 
     Rectangle {
@@ -139,17 +142,13 @@ Item {
                     anchors.topMargin: 1
                     anchors.bottomMargin: 1
                     radius: 6
-                    color: delegateRoot.isBeingDragged ? "#ffffff" : (delegateRoot.isSelected ? "#f0f6ff" : (itemMouse.containsMouse ? "#f8f8f8" : "#ffffff"))
-                    border.color: delegateRoot.isBeingDragged ? "#d0d0d0" : "transparent"
+                    color: delegateRoot.isBeingDragged ? "#f5f5f5" : (delegateRoot.isSelected ? "#f0f6ff" : (itemMouse.containsMouse ? "#f8f8f8" : "#ffffff"))
+                    border.color: delegateRoot.isBeingDragged ? "#e0e0e0" : "transparent"
                     border.width: delegateRoot.isBeingDragged ? 1 : 0
 
-                    // 拖起时的缩放与阴影效果
-                    scale: delegateRoot.isBeingDragged ? 1.03 : 1.0
-                    opacity: delegateRoot.isBeingDragged ? 0.92 : 1.0
+                    // 拖起时原位置变为占位符
+                    opacity: delegateRoot.isBeingDragged ? 0.35 : 1.0
 
-                    Behavior on scale {
-                        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-                    }
                     Behavior on opacity {
                         NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
                     }
@@ -326,6 +325,12 @@ Item {
                             dragState.draggedIndex = delegateRoot.index;
                             dragState.isDragging = true;
                             dragState.dropTargetIndex = delegateRoot.index;
+                            dragState.draggedFileName = delegateRoot.fileName;
+
+                            // 记录鼠标在根坐标系中的位置
+                            var posInRoot = mapToItem(root, mouse.x, mouse.y);
+                            dragState.dragMouseRootX = posInRoot.x;
+                            dragState.dragMouseRootY = posInRoot.y;
                         }
 
                         onPositionChanged: function(mouse) {
@@ -334,6 +339,11 @@ Item {
                             // 计算鼠标在 ListView 中的 Y 坐标
                             var posInList = mapToItem(listView.contentItem, mouse.x, mouse.y);
                             dragState.dragMouseY = posInList.y;
+
+                            // 记录鼠标在根坐标系中的位置
+                            var posInRoot = mapToItem(root, mouse.x, mouse.y);
+                            dragState.dragMouseRootX = posInRoot.x;
+                            dragState.dragMouseRootY = posInRoot.y;
 
                             // 根据鼠标位置计算目标放置索引
                             var targetIdx = Math.floor(posInList.y / 64); // 62 height + 2 spacing
@@ -374,6 +384,131 @@ Item {
                     border.width: 2
                     z: -1
                 }
+            }
+        }
+
+        // ── 拖放位置指示线 ──
+        Rectangle {
+            id: dropIndicator
+            visible: dragState.isDragging && dragState.dropTargetIndex >= 0
+                     && dragState.dropTargetIndex !== dragState.draggedIndex
+            width: listView.width - 16
+            height: 2
+            radius: 1
+            color: "#0078D4"
+            x: 12
+            z: 100
+
+            y: {
+                if (!dragState.isDragging || dragState.dropTargetIndex < 0
+                    || dragState.dropTargetIndex === dragState.draggedIndex)
+                    return -100;
+                var screenY = 4 + dragState.dropTargetIndex * 64 - listView.contentY;
+                if (screenY < 2 || screenY > listView.height + 6)
+                    return -100;
+                return screenY;
+            }
+
+            Behavior on y {
+                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+            }
+
+            // 左侧圆点
+            Rectangle {
+                width: 8; height: 8; radius: 4
+                color: "#0078D4"
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: parent.left
+                anchors.leftMargin: -3
+            }
+
+            // 右侧圆点
+            Rectangle {
+                width: 8; height: 8; radius: 4
+                color: "#0078D4"
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: -3
+            }
+        }
+    }
+
+    // ── 拖拽时的浮动副本（跟随鼠标） ──
+    Rectangle {
+        id: dragGhost
+        visible: dragState.isDragging
+        width: root.width * 0.65
+        height: 48
+        x: dragState.dragMouseRootX - width / 2
+        y: dragState.dragMouseRootY - height - 12
+        z: 1000
+        radius: 8
+        color: "#ffffff"
+        opacity: 0.88
+        border.color: "#0078D4"
+        border.width: 1.5
+
+        // 外层阴影
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -2
+            radius: parent.radius + 2
+            color: "transparent"
+            border.color: "#180078D4"
+            border.width: 3
+            z: -1
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            spacing: 8
+
+            // 视频图标
+            Rectangle {
+                Layout.preferredWidth: 28
+                Layout.preferredHeight: 28
+                radius: 5
+                color: "#e3effc"
+
+                Canvas {
+                    anchors.centerIn: parent
+                    width: 16; height: 16
+                    onPaint: {
+                        var ctx = getContext("2d");
+                        ctx.clearRect(0, 0, width, height);
+                        ctx.strokeStyle = "#0078D4";
+                        ctx.lineWidth = 1.2;
+                        ctx.beginPath();
+                        ctx.roundedRect(0.5, 0.5, 15, 10.5, 1.5, 1.5);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(5.5, 11); ctx.lineTo(5.5, 14);
+                        ctx.lineTo(10.5, 14); ctx.lineTo(10.5, 11);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(4, 14); ctx.lineTo(12, 14);
+                        ctx.stroke();
+                        ctx.fillStyle = "#0078D4";
+                        ctx.beginPath();
+                        ctx.moveTo(6, 3.5); ctx.lineTo(6, 8.5);
+                        ctx.lineTo(10.5, 6); ctx.closePath();
+                        ctx.fill();
+                    }
+                }
+            }
+
+            // 文件名
+            Text {
+                Layout.fillWidth: true
+                text: dragState.draggedFileName
+                font.pixelSize: 12
+                font.weight: Font.Medium
+                font.family: "Microsoft YaHei UI"
+                color: "#1a1a1a"
+                elide: Text.ElideRight
+                maximumLineCount: 1
             }
         }
     }
