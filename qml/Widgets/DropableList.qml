@@ -10,6 +10,63 @@ Item {
 
     // ── 公共属性 ──
     property int currentIndex: -1
+    property var selectedIndices: ({})
+    property int selectionVersion: 0
+    property int anchorIndex: -1
+
+    // ── 多选辅助函数 ──
+    function isIndexSelected(idx) {
+        void selectionVersion;
+        return selectedIndices.hasOwnProperty(idx.toString());
+    }
+    function getSelectedCount() {
+        void selectionVersion;
+        return Object.keys(selectedIndices).length;
+    }
+    function selectOnly(idx) {
+        selectedIndices = {};
+        if (idx >= 0) selectedIndices[idx.toString()] = true;
+        currentIndex = idx;
+        anchorIndex = idx;
+        selectionVersion++;
+    }
+    function toggleSelect(idx) {
+        var s = selectedIndices;
+        var key = idx.toString();
+        if (s.hasOwnProperty(key)) delete s[key]; else s[key] = true;
+        selectedIndices = s;
+        currentIndex = idx;
+        anchorIndex = idx;
+        selectionVersion++;
+    }
+    function rangeSelect(idx) {
+        var a = anchorIndex >= 0 ? anchorIndex : 0;
+        var start = Math.min(a, idx);
+        var end = Math.max(a, idx);
+        var s = {};
+        for (var i = start; i <= end; i++) s[i.toString()] = true;
+        selectedIndices = s;
+        currentIndex = idx;
+        selectionVersion++;
+    }
+    function selectAll() {
+        var s = {};
+        for (var i = 0; i < videoModel.count; i++) s[i.toString()] = true;
+        selectedIndices = s;
+        selectionVersion++;
+    }
+    function clearSelection() {
+        selectedIndices = {};
+        currentIndex = -1;
+        anchorIndex = -1;
+        selectionVersion++;
+    }
+    function removeSelectedItems() {
+        var indices = Object.keys(selectedIndices).map(function(k) { return parseInt(k); });
+        indices.sort(function(a, b) { return b - a; });
+        for (var i = 0; i < indices.length; i++) videoModel.remove(indices[i], 1);
+        clearSelection();
+    }
     property bool externalDragHover: false
     property var supportedVideoExts: [
         ".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".wmv", ".m4v",
@@ -116,14 +173,14 @@ Item {
         for (var j = 0; j < items.length; j++) {
             videoModel.append(items[j]);
         }
-        root.currentIndex = -1;
+        root.clearSelection();
     }
 
     // ── 置顶 ──
     function moveItemToTop(idx) {
         if (idx > 0 && idx < videoModel.count) {
             videoModel.move(idx, 0, 1);
-            root.currentIndex = 0;
+            root.selectOnly(0);
         }
     }
 
@@ -131,7 +188,7 @@ Item {
     function moveItemToBottom(idx) {
         if (idx >= 0 && idx < videoModel.count - 1) {
             videoModel.move(idx, videoModel.count - 1, 1);
-            root.currentIndex = videoModel.count - 1;
+            root.selectOnly(videoModel.count - 1);
         }
     }
 
@@ -139,9 +196,7 @@ Item {
     function removeItem(idx) {
         if (idx >= 0 && idx < videoModel.count) {
             videoModel.remove(idx, 1);
-            if (root.currentIndex >= videoModel.count) {
-                root.currentIndex = videoModel.count - 1;
-            }
+            clearSelection();
         }
     }
 
@@ -185,9 +240,26 @@ Item {
     }
 
     Rectangle {
+        id: mainContainer
         anchors.fill: parent
         color: "#f3f3f3"
         radius: 8
+        focus: true
+
+        Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_A && (event.modifiers & Qt.ControlModifier)) {
+                root.selectAll();
+                event.accepted = true;
+            } else if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace) {
+                if (root.getSelectedCount() > 0) {
+                    root.removeSelectedItems();
+                    event.accepted = true;
+                }
+            } else if (event.key === Qt.Key_Escape) {
+                root.clearSelection();
+                event.accepted = true;
+            }
+        }
 
         ListView {
             id: listView
@@ -215,7 +287,7 @@ Item {
                 required property string filePath
                 required property string iconSource
 
-                property bool isSelected: root.currentIndex === index
+                property bool isSelected: root.isIndexSelected(index)
                 property bool isBeingDragged: dragState.draggedIndex === index && dragState.isDragging
 
                 // ── 拖拽时的占位偏移：如果有东西正在被拖到此位置附近，则上下挤开 ──
@@ -439,14 +511,20 @@ Item {
                         property real pressStartY: 0
                         property bool dragActive: false
 
-                        onClicked: {
-                            root.currentIndex = delegateRoot.index;
+                        onClicked: function(mouse) {
+                            if (mouse.modifiers & Qt.ControlModifier) {
+                                root.toggleSelect(delegateRoot.index);
+                            } else if (mouse.modifiers & Qt.ShiftModifier) {
+                                root.rangeSelect(delegateRoot.index);
+                            } else {
+                                root.selectOnly(delegateRoot.index);
+                            }
+                            mainContainer.forceActiveFocus();
                         }
 
                         onPressed: function(mouse) {
                             pressStartY = mouse.y;
                             dragActive = false;
-                            root.currentIndex = delegateRoot.index;
                         }
 
                         onPressAndHold: function(mouse) {
@@ -489,8 +567,7 @@ Item {
 
                                 if (fromIdx !== toIdx && toIdx >= 0 && toIdx < videoModel.count) {
                                     videoModel.move(fromIdx, toIdx, 1);
-                                    // 更新选中索引
-                                    root.currentIndex = toIdx;
+                                    root.selectOnly(toIdx);
                                 }
                             }
 
@@ -569,7 +646,7 @@ Item {
             MenuItem { text: "智能降序"; onTriggered: root.smartSort(false) }
         }
 
-        // ── 右键菜单（点击项目） ──
+        // ── 右键菜单（单选项目） ──
         Menu {
             id: itemContextMenu
             property int targetIndex: -1
@@ -585,21 +662,51 @@ Item {
             }
         }
 
-        // ── 右键菜单触发区域 ──
+        // ── 右键菜单（多选） ──
+        Menu {
+            id: multiSelectMenu
+            MenuItem {
+                text: "删除选中项 (" + root.getSelectedCount() + ")"
+                onTriggered: root.removeSelectedItems()
+            }
+        }
+
+        // ── 鼠标交互区域（右键菜单 + 左键空白取消选择） ──
         MouseArea {
             anchors.fill: parent
-            acceptedButtons: Qt.RightButton
+            acceptedButtons: Qt.RightButton | Qt.LeftButton
+
+            onPressed: function(mouse) {
+                if (mouse.button === Qt.LeftButton) {
+                    var posInContent = mapToItem(listView.contentItem, mouse.x, mouse.y);
+                    var clickedIndex = listView.indexAt(posInContent.x, posInContent.y);
+                    if (clickedIndex >= 0) {
+                        mouse.accepted = false;
+                        return;
+                    }
+                }
+            }
 
             onClicked: function(mouse) {
-                var posInContent = mapToItem(listView.contentItem, mouse.x, mouse.y);
-                var clickedIndex = listView.indexAt(posInContent.x, posInContent.y);
+                mainContainer.forceActiveFocus();
+                if (mouse.button === Qt.LeftButton) {
+                    root.clearSelection();
+                } else if (mouse.button === Qt.RightButton) {
+                    var posInContent = mapToItem(listView.contentItem, mouse.x, mouse.y);
+                    var clickedIndex = listView.indexAt(posInContent.x, posInContent.y);
 
-                if (clickedIndex >= 0) {
-                    root.currentIndex = clickedIndex;
-                    itemContextMenu.targetIndex = clickedIndex;
-                    itemContextMenu.popup();
-                } else {
-                    emptySpaceMenu.popup();
+                    if (clickedIndex >= 0) {
+                        if (root.getSelectedCount() > 1 && root.isIndexSelected(clickedIndex)) {
+                            multiSelectMenu.popup();
+                        } else {
+                            root.selectOnly(clickedIndex);
+                            itemContextMenu.targetIndex = clickedIndex;
+                            itemContextMenu.popup();
+                        }
+                    } else {
+                        root.clearSelection();
+                        emptySpaceMenu.popup();
+                    }
                 }
             }
         }
