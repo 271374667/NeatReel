@@ -521,7 +521,9 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         pressAndHoldInterval: 150
-                        cursorShape: dragState.isDragging ? Qt.ClosedHandCursor : (containsMouse ? Qt.OpenHandCursor : Qt.ArrowCursor)
+                        cursorShape: (dragState.isDragging || pressed)
+                                     ? Qt.ClosedHandCursor
+                                     : (containsMouse ? Qt.OpenHandCursor : Qt.ArrowCursor)
 
                         property real pressStartY: 0
                         property bool dragActive: false
@@ -692,7 +694,15 @@ Item {
         // ── 鼠标交互区域（右键菜单 + 左键空白取消选择） ──
         MouseArea {
             anchors.fill: parent
+            hoverEnabled: true
             acceptedButtons: Qt.RightButton | Qt.LeftButton
+            property bool hoverOnItem: {
+                var posInContent = mapToItem(listView.contentItem, mouseX, mouseY);
+                return listView.indexAt(posInContent.x, posInContent.y) >= 0;
+            }
+            cursorShape: hoverOnItem
+                         ? ((pressed || dragState.isDragging) ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
+                         : Qt.ArrowCursor
 
             onPressed: function(mouse) {
                 if (mouse.button === Qt.LeftButton) {
