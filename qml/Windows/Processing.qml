@@ -120,13 +120,15 @@ Item {
                     }
                 }
 
-                // ── 当前阶段进度 ──
-                ColumnLayout {
+                // ── 当前阶段：文字行（固定高度避免字体 metrics 撑开） ──
+                Item {
                     Layout.fillWidth: true
-                    spacing: 0
+                    Layout.preferredHeight: 16
+                    Layout.minimumHeight: 16
+                    Layout.maximumHeight: 16
 
                     RowLayout {
-                        Layout.fillWidth: true
+                        anchors.fill: parent
 
                         Text {
                             text: "当前阶段: " + root.stageName
@@ -134,6 +136,7 @@ Item {
                             font.family: "Microsoft YaHei UI"
                             color: "#555555"
                             renderType: Text.NativeRendering
+                            Layout.alignment: Qt.AlignVCenter
                         }
                         Item { Layout.fillWidth: true }
                         Text {
@@ -142,48 +145,60 @@ Item {
                             font.family: "Microsoft YaHei UI"
                             color: "#888888"
                             renderType: Text.NativeRendering
-                        }
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 4
-                        radius: 2
-                        color: "#f0f0f0"
-
-                        Rectangle {
-                            width: parent.width * Math.max(0.0, Math.min(1.0, root.stageProgress))
-                            height: parent.height
-                            radius: parent.radius
-                            color: "#60bdff"
-                            Behavior on width {
-                                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-                            }
+                            Layout.alignment: Qt.AlignVCenter
                         }
                     }
                 }
 
-                // ── 预计剩余时间 ──
-                RowLayout {
-                    Layout.topMargin: 1
-                    Layout.preferredHeight: 16
-                    spacing: 4
+                // ── 当前阶段：进度条（固定高度，与文字行分离，精确控制间距） ──
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 4
+                    Layout.minimumHeight: 4
+                    Layout.maximumHeight: 4
+                    radius: 2
+                    color: "#f0f0f0"
 
-                    Image {
-                        source: ImagePath.clock
-                        sourceSize.width: 13
-                        sourceSize.height: 13
-                        Layout.alignment: Qt.AlignVCenter
-                        opacity: 0.5
+                    Rectangle {
+                        width: parent.width * Math.max(0.0, Math.min(1.0, root.stageProgress))
+                        height: parent.height
+                        radius: parent.radius
+                        color: "#60bdff"
+                        Behavior on width {
+                            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+                        }
                     }
+                }
 
-                    Text {
-                        text: "预计剩余: " + root.estimatedRemaining
-                        font.pixelSize: 12
-                        font.family: "Microsoft YaHei UI"
-                        color: "#888888"
-                        renderType: Text.NativeRendering
-                        Layout.alignment: Qt.AlignVCenter
+                // ── 预计剩余时间（与进度条间隙 2px） ──
+                Item {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 2
+                    Layout.preferredHeight: 13
+                    Layout.minimumHeight: 13
+                    Layout.maximumHeight: 13
+
+                    Row {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 4
+
+                        Image {
+                            source: ImagePath.clock
+                            sourceSize.width: 13
+                            sourceSize.height: 13
+                            anchors.verticalCenter: parent.verticalCenter
+                            opacity: 0.5
+                        }
+
+                        Text {
+                            text: "预计剩余: " + root.estimatedRemaining
+                            font.pixelSize: 12
+                            font.family: "Microsoft YaHei UI"
+                            color: "#888888"
+                            renderType: Text.NativeRendering
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
                     }
                 }
 
