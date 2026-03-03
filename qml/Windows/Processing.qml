@@ -67,15 +67,17 @@ Item {
             Layout.preferredHeight: 300
             title: "处理信息"
             icon: ImagePath.info
+            contentBottomMargin: 4
 
             ColumnLayout {
                 anchors.fill: parent
-                spacing: 14
+                spacing: 0
 
                 // ── 总进度 ──
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    Layout.topMargin: 4
+                    spacing: 2
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -121,7 +123,7 @@ Item {
                 // ── 当前阶段进度 ──
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 5
+                    spacing: 0
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -162,14 +164,16 @@ Item {
                 }
 
                 // ── 预计剩余时间 ──
-                Row {
-                    spacing: 5
+                RowLayout {
+                    Layout.topMargin: 1
+                    Layout.preferredHeight: 16
+                    spacing: 4
 
                     Image {
                         source: ImagePath.clock
                         sourceSize.width: 13
                         sourceSize.height: 13
-                        anchors.verticalCenter: parent.verticalCenter
+                        Layout.alignment: Qt.AlignVCenter
                         opacity: 0.5
                     }
 
@@ -179,12 +183,14 @@ Item {
                         font.family: "Microsoft YaHei UI"
                         color: "#888888"
                         renderType: Text.NativeRendering
+                        Layout.alignment: Qt.AlignVCenter
                     }
                 }
 
                 // ── 分割线 ──
                 Rectangle {
                     Layout.fillWidth: true
+                    Layout.topMargin: 4
                     height: 1
                     color: "#f0f0f0"
                 }
@@ -192,7 +198,8 @@ Item {
                 // ── 底部统计（四列严格等宽） ──
                 Item {
                     Layout.fillWidth: true
-                    implicitHeight: Math.max(statsRow.implicitHeight, 40)
+                    Layout.topMargin: 3
+                    implicitHeight: statsRow.implicitHeight
                     Layout.preferredHeight: implicitHeight
 
                     Row {
@@ -213,8 +220,8 @@ Item {
                             }
                             Text {
                                 text: root.projectId
-                                font.pixelSize: 14
-                                font.family: "Consolas"
+                                font.pixelSize: 16
+                                font.family: "Microsoft YaHei UI"
                                 font.weight: Font.DemiBold
                                 color: "#1a1a1a"
                                 renderType: Text.NativeRendering
@@ -255,13 +262,25 @@ Item {
                                 color: "#888888"
                                 renderType: Text.NativeRendering
                             }
-                            Text {
-                                text: root.processingSpeed.toFixed(1) + " x"
-                                font.pixelSize: 16
-                                font.family: "Microsoft YaHei UI"
-                                font.weight: Font.DemiBold
-                                color: "#1a1a1a"
-                                renderType: Text.NativeRendering
+                            Row {
+                                spacing: 1
+
+                                Text {
+                                    text: root.processingSpeed.toFixed(1)
+                                    font.pixelSize: 16
+                                    font.family: "Microsoft YaHei UI"
+                                    font.weight: Font.DemiBold
+                                    color: "#1a1a1a"
+                                    renderType: Text.NativeRendering
+                                }
+                                Text {
+                                    text: "x"
+                                    font.pixelSize: 14
+                                    font.family: "Microsoft YaHei UI"
+                                    font.weight: Font.DemiBold
+                                    color: "#888888"
+                                    renderType: Text.NativeRendering
+                                }
                             }
                         }
 
@@ -281,7 +300,7 @@ Item {
                                 text: root.processingStatus === 1 ? "完成"
                                     : root.processingStatus === 2 ? "错误"
                                     : "进行中"
-                                font.pixelSize: 14
+                                font.pixelSize: 16
                                 font.family: "Microsoft YaHei UI"
                                 font.weight: Font.DemiBold
                                 color: root.processingStatus === 1 ? "#107C10"
