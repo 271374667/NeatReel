@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.FluentWinUI3
 import QtQuick.Layouts
+import QtQuick.Effects
 import "../Components"
 import "../Widgets"
 import "../"
@@ -11,20 +12,20 @@ Item {
     // ══════════════════════════════════════
     //  公共属性
     // ══════════════════════════════════════
-    property real   totalProgress: 0.0              // 总进度 0.0–1.0
-    property int    totalCurrent: 0                 // 当前已处理数
-    property int    totalCount: 0                   // 总数量
-    property real   stageProgress: 0.0             // 当前阶段进度 0.0–1.0
-    property string stageName: "准备中"            // 阶段名称
-    property string elapsedTime: "00:00:00"        // 已用时间
-    property real   processingSpeed: 0.0           // 处理速度（倍速）
-    property string estimatedRemaining: "0 秒"     // 预计剩余时间
-    property string projectId: ""                  // 项目编号（随机8位hex）
+    property real   totalProgress: 0.0
+    property int    totalCurrent: 0
+    property int    totalCount: 0
+    property real   stageProgress: 0.0
+    property string stageName: "准备中"
+    property string elapsedTime: "00:00:00"
+    property real   processingSpeed: 0.0
+    property string estimatedRemaining: "0 秒"
+    property string projectId: ""
     // 状态：0=进行中  1=完成  2=错误
     property int    processingStatus: 0
 
     // DisplayScreen 转发属性
-    property int    displayState: 0                // DisplayScreen.State.Waiting
+    property int    displayState: 0
     property url    frameSource: ""
 
     // ══════════════════════════════════════
@@ -188,116 +189,127 @@ Item {
                     color: "#f0f0f0"
                 }
 
-                // ── 底部统计（四列等宽） ──
-                RowLayout {
+                // ── 底部统计（四列严格等宽，用 Row + Column 精确控制） ──
+                Item {
                     Layout.fillWidth: true
-                    spacing: 0
+                    height: statsRow.height
 
-                    // 项目编号
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 3
+                    Row {
+                        id: statsRow
+                        width: parent.width
 
-                        Text {
-                            text: "项目编号"
-                            font.pixelSize: 11
-                            font.family: "Microsoft YaHei UI"
-                            color: "#888888"
-                            renderType: Text.NativeRendering
+                        // 项目编号
+                        Column {
+                            width: statsRow.width / 4
+                            spacing: 3
+
+                            Text {
+                                text: "项目编号"
+                                font.pixelSize: 11
+                                font.family: "Microsoft YaHei UI"
+                                color: "#888888"
+                                renderType: Text.NativeRendering
+                            }
+                            Text {
+                                text: root.projectId
+                                font.pixelSize: 14
+                                font.family: "Consolas"
+                                font.weight: Font.DemiBold
+                                color: "#1a1a1a"
+                                renderType: Text.NativeRendering
+                            }
                         }
-                        Text {
-                            text: root.projectId
-                            font.pixelSize: 14
-                            font.family: "Consolas"
-                            font.weight: Font.DemiBold
-                            color: "#1a1a1a"
-                            renderType: Text.NativeRendering
-                        }
-                    }
 
-                    // 已用时间
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 3
+                        // 已用时间
+                        Column {
+                            width: statsRow.width / 4
+                            spacing: 3
 
-                        Text {
-                            text: "已用时间"
-                            font.pixelSize: 11
-                            font.family: "Microsoft YaHei UI"
-                            color: "#888888"
-                            renderType: Text.NativeRendering
+                            Text {
+                                text: "已用时间"
+                                font.pixelSize: 11
+                                font.family: "Microsoft YaHei UI"
+                                color: "#888888"
+                                renderType: Text.NativeRendering
+                            }
+                            Text {
+                                text: root.elapsedTime
+                                font.pixelSize: 16
+                                font.family: "Microsoft YaHei UI"
+                                font.weight: Font.DemiBold
+                                color: "#1a1a1a"
+                                renderType: Text.NativeRendering
+                            }
                         }
-                        Text {
-                            text: root.elapsedTime
-                            font.pixelSize: 16
-                            font.family: "Microsoft YaHei UI"
-                            font.weight: Font.DemiBold
-                            color: "#1a1a1a"
-                            renderType: Text.NativeRendering
-                        }
-                    }
 
-                    // 处理速度
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 3
+                        // 处理速度
+                        Column {
+                            width: statsRow.width / 4
+                            spacing: 3
 
-                        Text {
-                            text: "处理速度"
-                            font.pixelSize: 11
-                            font.family: "Microsoft YaHei UI"
-                            color: "#888888"
-                            renderType: Text.NativeRendering
+                            Text {
+                                text: "处理速度"
+                                font.pixelSize: 11
+                                font.family: "Microsoft YaHei UI"
+                                color: "#888888"
+                                renderType: Text.NativeRendering
+                            }
+                            Text {
+                                text: root.processingSpeed.toFixed(1) + " x"
+                                font.pixelSize: 16
+                                font.family: "Microsoft YaHei UI"
+                                font.weight: Font.DemiBold
+                                color: "#1a1a1a"
+                                renderType: Text.NativeRendering
+                            }
                         }
-                        Text {
-                            text: root.processingSpeed.toFixed(1) + " x"
-                            font.pixelSize: 16
-                            font.family: "Microsoft YaHei UI"
-                            font.weight: Font.DemiBold
-                            color: "#1a1a1a"
-                            renderType: Text.NativeRendering
-                        }
-                    }
 
-                    // 状态
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 3
+                        // 状态
+                        Column {
+                            width: statsRow.width / 4
+                            spacing: 3
 
-                        Text {
-                            text: "状态"
-                            font.pixelSize: 11
-                            font.family: "Microsoft YaHei UI"
-                            color: "#888888"
-                            renderType: Text.NativeRendering
-                        }
-                        Text {
-                            text: root.processingStatus === 1 ? "完成"
-                                : root.processingStatus === 2 ? "错误"
-                                : "进行中"
-                            font.pixelSize: 14
-                            font.family: "Microsoft YaHei UI"
-                            font.weight: Font.DemiBold
-                            color: root.processingStatus === 1 ? "#107C10"
-                                 : root.processingStatus === 2 ? "#C42B1C"
-                                 : "#0078D4"
-                            renderType: Text.NativeRendering
+                            Text {
+                                text: "状态"
+                                font.pixelSize: 11
+                                font.family: "Microsoft YaHei UI"
+                                color: "#888888"
+                                renderType: Text.NativeRendering
+                            }
+                            Text {
+                                text: root.processingStatus === 1 ? "完成"
+                                    : root.processingStatus === 2 ? "错误"
+                                    : "进行中"
+                                font.pixelSize: 14
+                                font.family: "Microsoft YaHei UI"
+                                font.weight: Font.DemiBold
+                                color: root.processingStatus === 1 ? "#107C10"
+                                     : root.processingStatus === 2 ? "#C42B1C"
+                                     : "#0078D4"
+                                renderType: Text.NativeRendering
+                            }
                         }
                     }
                 }
 
                 // ── 按钮行 ──
+                // 运行中：中止按钮占满整行
+                // 完成时：继续(3/4) + 打开输出目录(1/4)
+                // 错误时：继续按钮占满整行
                 Item {
                     Layout.fillWidth: true
                     implicitHeight: 32
 
-                    // 主操作按钮（3/4 宽度）
+                    // 主操作按钮
                     Rectangle {
                         id: actionBtn
                         anchors.left: parent.left
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
-                        width: parent.width * 3 / 4 - 4
+                        // 仅完成状态 (1) 时缩为 3/4，为目录按钮留空
+                        width: root.processingStatus === 1
+                               ? parent.width * 3 / 4 - 4
+                               : parent.width
                         radius: 4
                         border.color: Qt.rgba(0, 0, 0, 0.12)
                         border.width: 1
@@ -310,6 +322,9 @@ Item {
                              : btnHovered ? Qt.lighter(baseColor, 1.10)
                              : baseColor
 
+                        Behavior on width {
+                            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+                        }
                         Behavior on color {
                             ColorAnimation { duration: 100 }
                         }
@@ -318,12 +333,20 @@ Item {
                             anchors.centerIn: parent
                             spacing: 6
 
+                            // 白色图标
                             Image {
+                                id: actionIcon
                                 source: root.processingStatus === 0 ? ImagePath.cancel : ImagePath.ok
                                 sourceSize.width: 15
                                 sourceSize.height: 15
                                 anchors.verticalCenter: parent.verticalCenter
+                                layer.enabled: true
+                                layer.effect: MultiEffect {
+                                    colorization: 1.0
+                                    colorizationColor: "white"
+                                }
                             }
+
                             Text {
                                 text: root.processingStatus === 0 ? "中止" : "继续"
                                 font.pixelSize: 13
@@ -351,7 +374,7 @@ Item {
                         }
                     }
 
-                    // 打开输出目录按钮（1/4 宽度）
+                    // 打开输出目录按钮：仅完成 (status === 1) 时显示
                     Rectangle {
                         id: dirBtn
                         anchors.right: parent.right
@@ -362,10 +385,15 @@ Item {
                         color: dirBtnPressed ? "#ebebeb" : dirBtnHovered ? "#f5f5f5" : "#ffffff"
                         border.color: "#e0e0e0"
                         border.width: 1
+                        opacity: root.processingStatus === 1 ? 1.0 : 0.0
+                        visible: opacity > 0
 
                         property bool dirBtnHovered: false
                         property bool dirBtnPressed: false
 
+                        Behavior on opacity {
+                            NumberAnimation { duration: 200 }
+                        }
                         Behavior on color {
                             ColorAnimation { duration: 100 }
                         }
