@@ -64,7 +64,7 @@ Item {
         // ── 处理信息面板 ──────────────────────────
         FluentPane {
             Layout.fillWidth: true
-            Layout.preferredHeight: 252
+            Layout.preferredHeight: 300
             title: "处理信息"
             icon: ImagePath.info
 
@@ -192,7 +192,8 @@ Item {
                 // ── 底部统计（四列严格等宽） ──
                 Item {
                     Layout.fillWidth: true
-                    height: statsRow.height
+                    implicitHeight: Math.max(statsRow.implicitHeight, 40)
+                    Layout.preferredHeight: implicitHeight
 
                     Row {
                         id: statsRow
