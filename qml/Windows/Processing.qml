@@ -64,7 +64,7 @@ Item {
         // ── 处理信息面板 ──────────────────────────
         FluentPane {
             Layout.fillWidth: true
-            Layout.preferredHeight: 308
+            Layout.preferredHeight: 252
             title: "处理信息"
             icon: ImagePath.info
 
@@ -189,7 +189,7 @@ Item {
                     color: "#f0f0f0"
                 }
 
-                // ── 底部统计（四列严格等宽，用 Row + Column 精确控制） ──
+                // ── 底部统计（四列严格等宽） ──
                 Item {
                     Layout.fillWidth: true
                     height: statsRow.height
@@ -291,144 +291,143 @@ Item {
                         }
                     }
                 }
+            }
+        }
 
-                // ── 按钮行 ──
-                // 运行中：中止按钮占满整行
-                // 完成时：继续(3/4) + 打开输出目录(1/4)
-                // 错误时：继续按钮占满整行
-                Item {
-                    Layout.fillWidth: true
-                    implicitHeight: 32
+        // ── 按钮行 ──────────────────────────────
+        // 运行中：中止按钮占满整行
+        // 完成时：继续(3/4) + 打开输出目录(1/4)
+        // 错误时：继续按钮占满整行
+        Item {
+            Layout.fillWidth: true
+            implicitHeight: 36
 
-                    // 主操作按钮
-                    Rectangle {
-                        id: actionBtn
-                        anchors.left: parent.left
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        // 仅完成状态 (1) 时缩为 3/4，为目录按钮留空
-                        width: root.processingStatus === 1
-                               ? parent.width * 3 / 4 - 4
-                               : parent.width
-                        radius: 4
-                        border.color: Qt.rgba(0, 0, 0, 0.12)
-                        border.width: 1
+            // 主操作按钮
+            Rectangle {
+                id: actionBtn
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                // 仅完成状态 (1) 时缩为 3/4，为目录按钮留空
+                width: root.processingStatus === 1
+                       ? parent.width * 3 / 4 - 4
+                       : parent.width
+                radius: 4
+                border.color: Qt.rgba(0, 0, 0, 0.12)
+                border.width: 1
 
-                        property bool btnHovered: false
-                        property bool btnPressed: false
+                property bool btnHovered: false
+                property bool btnPressed: false
 
-                        readonly property color baseColor: root.processingStatus === 0 ? "#C42B1C" : "#107C10"
-                        color: btnPressed ? Qt.darker(baseColor, 1.12)
-                             : btnHovered ? Qt.lighter(baseColor, 1.10)
-                             : baseColor
+                readonly property color baseColor: root.processingStatus === 0 ? "#C42B1C" : "#107C10"
+                color: btnPressed ? Qt.darker(baseColor, 1.12)
+                     : btnHovered ? Qt.lighter(baseColor, 1.10)
+                     : baseColor
 
-                        Behavior on width {
-                            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-                        }
-                        Behavior on color {
-                            ColorAnimation { duration: 100 }
-                        }
+                Behavior on width {
+                    NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+                }
+                Behavior on color {
+                    ColorAnimation { duration: 100 }
+                }
 
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: 6
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 6
 
-                            // 白色图标
-                            Image {
-                                id: actionIcon
-                                source: root.processingStatus === 0 ? ImagePath.cancel : ImagePath.ok
-                                sourceSize.width: 15
-                                sourceSize.height: 15
-                                anchors.verticalCenter: parent.verticalCenter
-                                layer.enabled: true
-                                layer.effect: MultiEffect {
-                                    colorization: 1.0
-                                    colorizationColor: "white"
-                                }
-                            }
-
-                            Text {
-                                text: root.processingStatus === 0 ? "中止" : "继续"
-                                font.pixelSize: 13
-                                font.family: "Microsoft YaHei UI"
-                                color: "white"
-                                renderType: Text.NativeRendering
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onEntered:  { actionBtn.btnHovered = true }
-                            onExited:   { actionBtn.btnHovered = false; actionBtn.btnPressed = false }
-                            onPressed:  { actionBtn.btnPressed = true }
-                            onReleased: { actionBtn.btnPressed = false }
-                            onClicked:  {
-                                if (root.processingStatus === 0)
-                                    root.cancelRequested()
-                                else
-                                    root.continueRequested()
-                            }
+                    // 白色图标
+                    Image {
+                        id: actionIcon
+                        source: root.processingStatus === 0 ? ImagePath.cancel : ImagePath.ok
+                        sourceSize.width: 15
+                        sourceSize.height: 15
+                        anchors.verticalCenter: parent.verticalCenter
+                        layer.enabled: true
+                        layer.effect: MultiEffect {
+                            brightness: 1.0
                         }
                     }
 
-                    // 打开输出目录按钮：仅完成 (status === 1) 时显示
-                    Rectangle {
-                        id: dirBtn
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        width: parent.width / 4 - 4
-                        radius: 4
-                        color: dirBtnPressed ? "#ebebeb" : dirBtnHovered ? "#f5f5f5" : "#ffffff"
-                        border.color: "#e0e0e0"
-                        border.width: 1
-                        opacity: root.processingStatus === 1 ? 1.0 : 0.0
-                        visible: opacity > 0
-
-                        property bool dirBtnHovered: false
-                        property bool dirBtnPressed: false
-
-                        Behavior on opacity {
-                            NumberAnimation { duration: 200 }
-                        }
-                        Behavior on color {
-                            ColorAnimation { duration: 100 }
-                        }
-
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: 5
-
-                            Image {
-                                source: ImagePath.folder
-                                sourceSize.width: 15
-                                sourceSize.height: 15
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Text {
-                                text: "打开输出目录"
-                                font.pixelSize: 12
-                                font.family: "Microsoft YaHei UI"
-                                color: "#1a1a1a"
-                                renderType: Text.NativeRendering
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onEntered:  { dirBtn.dirBtnHovered = true }
-                            onExited:   { dirBtn.dirBtnHovered = false; dirBtn.dirBtnPressed = false }
-                            onPressed:  { dirBtn.dirBtnPressed = true }
-                            onReleased: { dirBtn.dirBtnPressed = false }
-                            onClicked:  root.openOutputDir()
-                        }
+                    Text {
+                        text: root.processingStatus === 0 ? "中止" : "继续"
+                        font.pixelSize: 13
+                        font.family: "Microsoft YaHei UI"
+                        color: "white"
+                        renderType: Text.NativeRendering
+                        anchors.verticalCenter: parent.verticalCenter
                     }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered:  { actionBtn.btnHovered = true }
+                    onExited:   { actionBtn.btnHovered = false; actionBtn.btnPressed = false }
+                    onPressed:  { actionBtn.btnPressed = true }
+                    onReleased: { actionBtn.btnPressed = false }
+                    onClicked:  {
+                        if (root.processingStatus === 0)
+                            root.cancelRequested()
+                        else
+                            root.continueRequested()
+                    }
+                }
+            }
+
+            // 打开输出目录按钮：仅完成 (status === 1) 时显示
+            Rectangle {
+                id: dirBtn
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: parent.width / 4 - 4
+                radius: 4
+                color: dirBtnPressed ? "#ebebeb" : dirBtnHovered ? "#f5f5f5" : "#ffffff"
+                border.color: "#e0e0e0"
+                border.width: 1
+                opacity: root.processingStatus === 1 ? 1.0 : 0.0
+                visible: opacity > 0
+
+                property bool dirBtnHovered: false
+                property bool dirBtnPressed: false
+
+                Behavior on opacity {
+                    NumberAnimation { duration: 200 }
+                }
+                Behavior on color {
+                    ColorAnimation { duration: 100 }
+                }
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 5
+
+                    Image {
+                        source: ImagePath.folder
+                        sourceSize.width: 15
+                        sourceSize.height: 15
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Text {
+                        text: "打开输出目录"
+                        font.pixelSize: 12
+                        font.family: "Microsoft YaHei UI"
+                        color: "#1a1a1a"
+                        renderType: Text.NativeRendering
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered:  { dirBtn.dirBtnHovered = true }
+                    onExited:   { dirBtn.dirBtnHovered = false; dirBtn.dirBtnPressed = false }
+                    onPressed:  { dirBtn.dirBtnPressed = true }
+                    onReleased: { dirBtn.dirBtnPressed = false }
+                    onClicked:  root.openOutputDir()
                 }
             }
         }
