@@ -26,7 +26,7 @@ Item {
         FluentPane {
             id: leftPane
             title: "视频列表"
-            icon: "\uE714"
+            icon: ImagePath.videoList
             contentTopMargin: 0
             contentLeftMargin: 0
             contentRightMargin: 0
@@ -65,7 +65,7 @@ Item {
                 FluentPane {
                     id: detailPane
                     title: "视频详情"
-                    icon: "\uE8B2"
+                    icon: ImagePath.movie
 
                     Layout.fillWidth: true
                     Layout.preferredHeight: detailContent.implicitHeight + 88
@@ -125,7 +125,7 @@ Item {
                 FluentPane {
                     id: outputPane
                     title: "输出配置"
-                    icon: "\uE713"
+                    icon: ImagePath.setting
 
                     Layout.fillWidth: true
                     Layout.preferredHeight: outputContent.implicitHeight + 88

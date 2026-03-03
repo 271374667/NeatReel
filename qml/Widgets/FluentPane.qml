@@ -7,7 +7,7 @@ Item {
 
     // ── 公共属性 ──
     property string title: ""                     // 面板标题
-    property string icon: ""                      // 面板图标文字 (Segoe Fluent Icons 字符)
+    property string icon: ""                      // 面板图标（仅支持图片路径）
     property bool showHeader: true                // 是否显示顶部标题栏
     property real cornerRadius: 8                 // 圆角半径
     property real shadowRadius: 16                // 阴影模糊半径
@@ -29,6 +29,17 @@ Item {
 
     // ── 计算: header实际高度 ──
     readonly property int _effectiveHeaderHeight: showHeader && (title.length > 0 || icon.length > 0) ? headerHeight : 0
+    readonly property bool _hasValidIconPath: {
+        if (!icon || icon.length === 0) return false
+        return icon.indexOf("/") !== -1
+            || icon.indexOf("\\") !== -1
+            || icon.indexOf("qrc:") === 0
+            || icon.indexOf("file:") === 0
+            || icon.indexOf("http:") === 0
+            || icon.indexOf("https:") === 0
+            || icon.indexOf("data:") === 0
+            || icon.indexOf(":/") === 0
+    }
 
     // ── 外层阴影（通过偏移模糊的 Rectangle 模拟） ──
     Rectangle {
@@ -109,25 +120,18 @@ Item {
                 spacing: 8
 
                 // ── 图标 ──
-                Text {
-                    id: iconLabel
-                    visible: root.icon.length > 0
-                    text: root.icon
-                    font.family: "Segoe Fluent Icons"
-                    font.pixelSize: root.iconSize
-                    color: root.iconColor
+                Image {
+                    id: iconImage
+                    visible: root._hasValidIconPath
+                    source: root.icon
+                    sourceSize.width: root.iconSize
+                    sourceSize.height: root.iconSize
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    asynchronous: true
+                    Layout.preferredWidth: root.iconSize
+                    Layout.preferredHeight: root.iconSize
                     Layout.alignment: Qt.AlignVCenter
-                    renderType: Text.NativeRendering
-
-                    // 图标微动画
-                    scale: iconHoverAnim.running ? 1.1 : 1.0
-                    Behavior on scale {
-                        NumberAnimation {
-                            id: iconHoverAnim
-                            duration: 200
-                            easing.type: Easing.OutCubic
-                        }
-                    }
                 }
 
                 // ── 标题文字 ──

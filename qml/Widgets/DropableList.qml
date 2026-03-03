@@ -255,7 +255,7 @@ Item {
     Rectangle {
         id: mainContainer
         anchors.fill: parent
-        color: "#f3f3f3"
+        color: "#ffffff"
         radius: 8
         focus: true
 
