@@ -6,7 +6,20 @@ import "../"
 Item {
     id: root
     width: 480
-    height: headerRow.height + contentGrid.height + contentGrid.anchors.topMargin + 32
+    readonly property int _cardMargin: 8
+    readonly property int _headerTopMargin: 12
+    readonly property int _dividerTopMargin: 10
+    readonly property int _contentTopMargin: 14
+    readonly property int _contentBottomMargin: 16
+    readonly property int _calculatedCardHeight: _headerTopMargin
+                                            + headerRow.height
+                                            + _dividerTopMargin
+                                            + headerDivider.height
+                                            + _contentTopMargin
+                                            + contentGrid.implicitHeight
+                                            + _contentBottomMargin
+    implicitHeight: _calculatedCardHeight + _cardMargin * 2
+    height: implicitHeight
 
     // ══════════════════════════════════════
     //  公共接口属性（外部可读写）
@@ -71,7 +84,7 @@ Item {
     Rectangle {
         id: cardBody
         anchors.fill: parent
-        anchors.margins: 8              // 为阴影留出空间
+        anchors.margins: root._cardMargin              // 为阴影留出空间
         radius: root.cornerRadius
         color: root.backgroundColor
         border.color: root.borderColor
@@ -96,7 +109,7 @@ Item {
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.leftMargin: 16
-            anchors.topMargin: 12
+            anchors.topMargin: root._headerTopMargin
             spacing: 8
             height: 24
 
@@ -127,7 +140,7 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: headerRow.bottom
-            anchors.topMargin: 10
+            anchors.topMargin: root._dividerTopMargin
             height: 1
             color: Qt.rgba(0, 0, 0, 0.06)
         }
@@ -140,9 +153,11 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: headerDivider.bottom
+            anchors.bottom: parent.bottom
             anchors.leftMargin: 16
             anchors.rightMargin: 16
-            anchors.topMargin: 14
+            anchors.topMargin: root._contentTopMargin
+            anchors.bottomMargin: root._contentBottomMargin
             columns: 2
             columnSpacing: 32
             rowSpacing: 16

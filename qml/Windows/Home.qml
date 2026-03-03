@@ -111,7 +111,7 @@ Item {
                         VideoInfo {
                             id: videoInfoItem
                             Layout.fillWidth: true
-                            Layout.preferredHeight: height
+                            Layout.preferredHeight: implicitHeight
                             fileName: "示例视频_01.mp4"
                             filePath: "C:/Users/Videos/示例视频_01.mp4"
                             durationAndResolution: "00:15:30 / 1920x1080"
