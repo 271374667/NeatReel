@@ -751,6 +751,9 @@ Item {
             Canvas {
                 id: emptyBorderCanvas
                 anchors.fill: parent
+                onVisibleChanged: if (visible) requestPaint()
+                onWidthChanged: if (visible) requestPaint()
+                onHeightChanged: if (visible) requestPaint()
                 onPaint: {
                     var ctx = getContext("2d");
                     ctx.clearRect(0, 0, width, height);
