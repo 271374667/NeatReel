@@ -8,6 +8,43 @@ import "../Components"
 Item {
     id: root
 
+    signal requestVideoInfo(string filePath)
+    signal requestCropPreview(string filePath)
+    signal requestRotatePreview(string filePath, int angle)
+    signal startProcessing()
+
+    property bool orientationDebouncing: false
+    property bool topActionButtonsDebouncing: false
+
+    function beginOrientationDebounce() {
+        orientationDebouncing = true
+        orientationDebounceTimer.restart()
+    }
+
+    function beginTopActionButtonsDebounce() {
+        topActionButtonsDebouncing = true
+        topActionButtonsDebounceTimer.restart()
+    }
+
+    Timer {
+        id: orientationDebounceTimer
+        interval: 2000
+        repeat: false
+        onTriggered: root.orientationDebouncing = false
+    }
+
+    Timer {
+        id: topActionButtonsDebounceTimer
+        interval: 500
+        repeat: false
+        onTriggered: root.topActionButtonsDebouncing = false
+    }
+
+    component HandCursor: HoverHandler {
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+    }
+
     // ── 画面方向互斥组 ──
     ButtonGroup { id: orientationGroup }
 
@@ -87,6 +124,9 @@ Item {
                             text: "预览去黑边的效果"
                             Layout.fillWidth: true
                             icon.source: ImagePath.crop
+                            enabled: !root.topActionButtonsDebouncing
+                            onClicked: root.beginTopActionButtonsDebounce()
+                            HandCursor {}
                         }
 
                         // ── 旋转按钮行 ──
@@ -98,12 +138,18 @@ Item {
                                 text: "顺时针旋转90°"
                                 Layout.fillWidth: true
                                 icon.source: ImagePath.clockwise
+                                enabled: !root.topActionButtonsDebouncing
+                                onClicked: root.beginTopActionButtonsDebounce()
+                                HandCursor {}
                             }
 
                             Button {
                                 text: "逆时针旋转90°"
                                 Layout.fillWidth: true
                                 icon.source: ImagePath.counterClockwise
+                                enabled: !root.topActionButtonsDebouncing
+                                onClicked: root.beginTopActionButtonsDebounce()
+                                HandCursor {}
                             }
                         }
 
@@ -154,11 +200,17 @@ Item {
                                 text: "横屏"
                                 checked: true
                                 ButtonGroup.group: orientationGroup
+                                enabled: !root.orientationDebouncing
+                                onClicked: root.beginOrientationDebounce()
+                                HandCursor {}
                             }
 
                             RadioButton {
                                 text: "竖屏"
                                 ButtonGroup.group: orientationGroup
+                                enabled: !root.orientationDebouncing
+                                onClicked: root.beginOrientationDebounce()
+                                HandCursor {}
                             }
 
                             Item { Layout.fillWidth: true }
@@ -195,6 +247,7 @@ Item {
                                             Layout.fillWidth: true
                                             model: ["速度", "普通", "质量"]
                                             currentIndex: 1
+                                            HandCursor {}
                                         }
                                     }
 
@@ -214,6 +267,7 @@ Item {
                                             Layout.fillWidth: true
                                             model: ["0°", "90°", "180°", "270°"]
                                             currentIndex: 1
+                                            HandCursor {}
                                         }
                                     }
                                 }
@@ -320,5 +374,6 @@ Item {
         anchors.bottomMargin: 24
         height: 44
         z: 100
+        HandCursor {}
     }
 }
