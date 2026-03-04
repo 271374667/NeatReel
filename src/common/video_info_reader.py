@@ -14,7 +14,10 @@
 from __future__ import annotations
 
 from collections import Counter
+from functools import lru_cache
+import math
 from pathlib import Path
+import time
 
 import av
 import numpy as np
@@ -25,9 +28,28 @@ from scipy.ndimage import (
     gaussian_filter,
 )
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from PIL import Image as PILImage
+
+
+@lru_cache(maxsize=32)
+def _get_cached_font(font_size: int):
+    try:
+        from PIL import ImageFont
+    except ImportError as exc:
+        raise ImportError("未安装 Pillow，无法生成缩略图。请先安装 pillow。") from exc
+
+    try:
+        return ImageFont.truetype("arial.ttf", font_size)
+    except OSError:
+        try:
+            return ImageFont.truetype("DejaVuSans.ttf", font_size)
+        except OSError:
+            return ImageFont.load_default()
 
 
 @dataclass
@@ -244,6 +266,277 @@ class VideoInfoReader:
                         return arr
                     idx += 1
         raise ValueError(f"帧索引 {frame_index} 超出视频范围: {video_path}")
+
+    def generate_thumb_image(
+        self,
+        video_path: Path | str,
+        thumb_resolution: tuple[int, int] = (640, 480),
+    ) -> PILImage.Image:
+        """
+        从视频中均匀抽帧，自动布局并拼接成缩略图总览图。
+
+        Args:
+            video_path: 视频文件路径。
+            thumb_resolution: 输出图分辨率，格式为 (宽, 高)。
+        """
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError as exc:
+            raise ImportError(
+                "未安装 Pillow，无法生成缩略图。请先安装 pillow。"
+            ) from exc
+
+        video_path = Path(video_path)
+        if not video_path.exists():
+            raise FileNotFoundError(f"video file not found: {video_path}")
+
+        canvas_w, canvas_h = thumb_resolution
+        if canvas_w <= 0 or canvas_h <= 0:
+            raise ValueError("thumb_resolution 必须是正整数分辨率")
+
+        func_start = time.perf_counter()
+        if hasattr(Image, "Resampling"):
+            fast_resample = Image.Resampling.BILINEAR
+        else:
+            fast_resample = Image.BILINEAR
+
+        target_count = 12
+        min_thumb_area = 9_000
+
+        with av.open(str(video_path)) as container:
+            if not container.streams.video:
+                raise ValueError(f"no video stream found: {video_path}")
+
+            stream = container.streams.video[0]
+            stream.thread_type = "AUTO"
+
+            # 尽量用低成本路径解码，提升缩略图生成速度
+            try:
+                stream.codec_context.skip_frame = "NONKEY"
+            except Exception:
+                pass
+            try:
+                stream.codec_context.skip_loop_filter = "ALL"
+            except Exception:
+                pass
+            try:
+                stream.codec_context.skip_idct = "ALL"
+            except Exception:
+                pass
+            try:
+                max_lowres = int(getattr(stream.codec_context, "max_lowres", 0) or 0)
+                if max_lowres > 0:
+                    stream.codec_context.lowres = 1
+            except Exception:
+                pass
+
+            duration = self._resolve_video_duration(container, stream)
+            v_width = int(stream.codec_context.width)
+            v_height = int(stream.codec_context.height)
+            src_aspect = v_width / max(v_height, 1)
+            is_landscape = v_width >= v_height
+
+            best_grid: tuple[int, int] | None = None
+            best_score: tuple[float, ...] | None = None
+            fallback_grid = (3, 4)
+            fallback_score: tuple[float, ...] | None = None
+
+            for n in range(target_count, 0, -1):
+                for cols in range(1, n + 1):
+                    if n % cols != 0:
+                        continue
+                    rows = n // cols
+
+                    cell_w = canvas_w / cols
+                    cell_h = canvas_h / rows
+                    scale = min(cell_w / max(v_width, 1), cell_h / max(v_height, 1))
+                    thumb_w = v_width * scale
+                    thumb_h = v_height * scale
+                    area = thumb_w * thumb_h
+                    fill_ratio = area / max(cell_w * cell_h, 1e-9)
+
+                    cell_aspect = cell_w / max(cell_h, 1e-9)
+                    aspect_error = abs(
+                        math.log(max(cell_aspect, 1e-9) / max(src_aspect, 1e-9))
+                    )
+                    orientation_match = (
+                        1.0
+                        if (is_landscape and rows >= cols)
+                        or ((not is_landscape) and cols >= rows)
+                        else 0.0
+                    )
+
+                    score = (float(n), orientation_match, fill_ratio, -aspect_error)
+                    if fallback_score is None or score > fallback_score:
+                        fallback_score = score
+                        fallback_grid = (cols, rows)
+
+                    if area < min_thumb_area:
+                        continue
+                    if best_score is None or score > best_score:
+                        best_score = score
+                        best_grid = (cols, rows)
+
+                if best_grid is not None:
+                    break
+
+            cols, rows = best_grid if best_grid is not None else fallback_grid
+            total_frames_needed = cols * rows
+
+            outer_border_width = 1
+            inner_border_width = 1 if min(canvas_w, canvas_h) >= 360 else 0
+            border_width = outer_border_width + inner_border_width
+            cell_slots: list[tuple[int, int, int, int, int, int, int, int]] = []
+
+            for idx in range(total_frames_needed):
+                col = idx % cols
+                row = idx // cols
+                x0 = int(round(col * canvas_w / cols))
+                x1 = int(round((col + 1) * canvas_w / cols))
+                y0 = int(round(row * canvas_h / rows))
+                y1 = int(round((row + 1) * canvas_h / rows))
+
+                ix0 = x0 + border_width
+                iy0 = y0 + border_width
+                ix1 = x1 - border_width
+                iy1 = y1 - border_width
+
+                if ix1 <= ix0:
+                    ix0, ix1 = x0, x1
+                if iy1 <= iy0:
+                    iy0, iy1 = y0, y1
+
+                inner_w = max(1, ix1 - ix0)
+                inner_h = max(1, iy1 - iy0)
+                cell_slots.append((x0, y0, x1, y1, ix0, iy0, inner_w, inner_h))
+
+            avg_inner_w = max(
+                1, int(sum(slot[6] for slot in cell_slots) / len(cell_slots))
+            )
+            font_size = max(12, avg_inner_w // 18)
+            font = _get_cached_font(font_size)
+
+            decode_budget_main = 0.12
+            decode_budget_fallback = 0.05
+            min_candidates = min(4, total_frames_needed)
+            max_candidates = max(total_frames_needed * 2, total_frames_needed + 4)
+            fps_hint = float(stream.average_rate or stream.base_rate or 30.0)
+            default_ts_step = (
+                duration / max(total_frames_needed - 1, 1) if duration > 0 else 0.0
+            )
+
+            candidates: list[tuple[av.VideoFrame, float]] = []
+            decoded_count = 0
+
+            def collect_candidates(deadline: float) -> None:
+                nonlocal decoded_count
+                for packet in container.demux(stream):
+                    if time.perf_counter() >= deadline:
+                        return
+                    for frame in packet.decode():
+                        if time.perf_counter() >= deadline:
+                            return
+                        ts = (
+                            float(frame.pts * stream.time_base)
+                            if frame.pts is not None and stream.time_base is not None
+                            else decoded_count / max(fps_hint, 1e-6)
+                        )
+                        decoded_count += 1
+                        candidates.append((frame, ts))
+                        if len(candidates) >= max_candidates:
+                            return
+
+            collect_candidates(time.perf_counter() + decode_budget_main)
+
+            if len(candidates) < min_candidates:
+                try:
+                    container.seek(0, stream=stream, backward=True, any_frame=True)
+                except Exception:
+                    try:
+                        container.seek(0)
+                    except Exception:
+                        pass
+                try:
+                    stream.codec_context.skip_frame = "DEFAULT"
+                except Exception:
+                    pass
+                collect_candidates(time.perf_counter() + decode_budget_fallback)
+
+            thumbnails: list[tuple[PILImage.Image, float]] = []
+            if not candidates:
+                for slot in cell_slots:
+                    _, _, _, _, _, _, inner_w, inner_h = slot
+                    thumbnails.append(
+                        (Image.new("RGB", (inner_w, inner_h), (0, 0, 0)), 0.0)
+                    )
+            else:
+                if total_frames_needed == 1:
+                    selected_indices = [0]
+                else:
+                    c_last = len(candidates) - 1
+                    selected_indices = [
+                        int(round(i * c_last / (total_frames_needed - 1)))
+                        for i in range(total_frames_needed)
+                    ]
+
+                render_cache: dict[tuple[int, int, int], PILImage.Image] = {}
+                for slot_idx, cand_idx in enumerate(selected_indices):
+                    _, ts = candidates[cand_idx]
+                    _, _, _, _, _, _, inner_w, inner_h = cell_slots[slot_idx]
+                    key = (cand_idx, inner_w, inner_h)
+                    cached_img = render_cache.get(key)
+                    if cached_img is None:
+                        src_frame = candidates[cand_idx][0]
+                        img = src_frame.to_image()
+                        if img.width != inner_w or img.height != inner_h:
+                            img = img.resize((inner_w, inner_h), fast_resample)
+                        render_cache[key] = img
+                        cached_img = img
+                    thumbnails.append((cached_img.copy(), ts))
+
+            if time.perf_counter() - func_start < 0.22:
+                for idx, (img, ts) in enumerate(thumbnails):
+                    draw = ImageDraw.Draw(img)
+                    use_ts = ts if ts > 0 else default_ts_step * idx
+                    hours = int(use_ts // 3600)
+                    minutes = int((use_ts % 3600) // 60)
+                    seconds = int(use_ts % 60)
+                    text = (
+                        f"{hours}:{minutes:02d}:{seconds:02d}"
+                        if hours > 0
+                        else f"{minutes}:{seconds:02d}"
+                    )
+                    tx, ty = font_size // 3, font_size // 4
+                    draw.text((tx + 1, ty + 1), text, fill=(16, 16, 16), font=font)
+                    draw.text((tx, ty), text, fill=(238, 238, 238), font=font)
+
+            canvas = Image.new("RGB", (canvas_w, canvas_h), (0, 0, 0))
+            for idx, (img, _) in enumerate(thumbnails):
+                _, _, _, _, ix0, iy0, _, _ = cell_slots[idx]
+                canvas.paste(img, (ix0, iy0))
+
+            outer_border_color = (58, 58, 58)
+            inner_border_color = (132, 132, 132)
+            draw_canvas = ImageDraw.Draw(canvas)
+            for x0, y0, x1, y1, *_ in cell_slots:
+                for i in range(outer_border_width):
+                    draw_canvas.rectangle(
+                        (x0 + i, y0 + i, x1 - 1 - i, y1 - 1 - i),
+                        outline=outer_border_color,
+                    )
+                for i in range(inner_border_width):
+                    offset = outer_border_width + i
+                    draw_canvas.rectangle(
+                        (
+                            x0 + offset,
+                            y0 + offset,
+                            x1 - 1 - offset,
+                            y1 - 1 - offset,
+                        ),
+                        outline=inner_border_color,
+                    )
+
+            return canvas
 
     # ======================== 采样策略 ========================
 
