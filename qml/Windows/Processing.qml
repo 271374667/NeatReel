@@ -9,460 +9,452 @@ import "../"
 Item {
     id: root
 
-    // ══════════════════════════════════════
-    //  公共属性
-    // ══════════════════════════════════════
-    property real   totalProgress: 0.0
-    property int    totalCurrent: 0
-    property int    totalCount: 0
-    property real   stageProgress: 0.0
+    property real totalProgress: 0.0
+    property int totalCurrent: 0
+    property int totalCount: 0
+    property real stageProgress: 0.0
     property string stageName: "准备中"
     property string elapsedTime: "00:00:00"
-    property real   processingSpeed: 0.0
+    property real processingSpeed: 0.0
     property string estimatedRemaining: "0 秒"
     property string projectId: ""
-    // 状态：0=进行中  1=完成  2=错误
-    property int    processingStatus: 0
+    property int processingStatus: 0
+    property int displayState: 0
+    property url frameSource: ""
 
-    // DisplayScreen 转发属性
-    property int    displayState: 0
-    property url    frameSource: ""
-
-    // ══════════════════════════════════════
-    //  信号
-    // ══════════════════════════════════════
     signal cancelRequested()
     signal continueRequested()
     signal openOutputDir()
 
-    // ══════════════════════════════════════
-    //  初始化
-    // ══════════════════════════════════════
+    readonly property real tp: Math.max(0.0, Math.min(1.0, totalProgress))
+    readonly property real sp: Math.max(0.0, Math.min(1.0, stageProgress))
+    readonly property color barColor: processingStatus === 1 ? "#107C10" : processingStatus === 2 ? "#C42B1C" : "#0078D4"
+    readonly property string pctText: Math.round(tp * 100) + "%"
+    readonly property string statusText: processingStatus === 1 ? "完成" : processingStatus === 2 ? "错误" : "进行中"
+
     Component.onCompleted: {
         var chars = "0123456789abcdef"
         var result = ""
-        for (var i = 0; i < 8; i++)
-            result += chars[Math.floor(Math.random() * chars.length)]
+        for (var i = 0; i < 8; i++) result += chars[Math.floor(Math.random() * chars.length)]
         projectId = result
     }
 
-    // ══════════════════════════════════════
-    //  布局
-    // ══════════════════════════════════════
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 8
+    component StatCard: Rectangle {
+        id: statCard
+        property string title: ""
+        property string value: ""
+        property string note: ""
+        property color valueColor: "#111111"
+        property bool mono: false
+        property bool big: false
+        implicitWidth: 170
+        implicitHeight: 88
+        radius: 10
+        color: "#f8f9fa"
+        border.width: 1
+        border.color: "#e6eaef"
+        clip: true
 
-        // ── 视频预览 ──────────────────────────────
-        DisplayScreen {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            displayState: root.displayState
-            frameSource: root.frameSource
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -1
+            radius: parent.radius + 1
+            color: "transparent"
+            border.width: 1
+            border.color: Qt.rgba(0, 0, 0, 0.05)
+            z: -1
         }
 
-        // ── 处理信息面板 ──────────────────────────
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 3
+
+            Text {
+                text: statCard.title
+                font.pixelSize: 12
+                font.family: "Microsoft YaHei UI"
+                color: "#5c6670"
+                renderType: Text.NativeRendering
+            }
+            Text {
+                text: statCard.value
+                font.pixelSize: statCard.big ? 22 : 18
+                font.family: statCard.mono ? "Consolas" : "Microsoft YaHei UI"
+                font.weight: Font.DemiBold
+                color: statCard.valueColor
+                elide: Text.ElideRight
+                renderType: Text.NativeRendering
+            }
+            Text {
+                visible: statCard.note.length > 0
+                text: statCard.note
+                font.pixelSize: 11
+                font.family: "Microsoft YaHei UI"
+                color: "#8a939d"
+                elide: Text.ElideRight
+                renderType: Text.NativeRendering
+            }
+        }
+    }
+
+    component ActionButton: Rectangle {
+        id: btn
+        property string text: ""
+        property bool primary: false
+        property bool danger: false
+        property bool hovered: false
+        property bool pressed: false
+        signal clicked()
+
+        implicitHeight: 36
+        implicitWidth: Math.max(96, label.implicitWidth + 28)
+        radius: 8
+        border.width: 1
+        border.color: primary ? "#006FC6" : danger && hovered ? "#d49a95" : "#d2d7dd"
+        color: primary
+               ? (pressed ? "#0063B1" : hovered ? "#1384da" : "#0078D4")
+               : danger
+                 ? (pressed ? Qt.rgba(196 / 255, 43 / 255, 28 / 255, 0.14)
+                            : hovered ? Qt.rgba(196 / 255, 43 / 255, 28 / 255, 0.08) : "transparent")
+                 : (pressed ? Qt.rgba(0, 0, 0, 0.08)
+                            : hovered ? Qt.rgba(0, 0, 0, 0.04) : "transparent")
+
+        Behavior on color { ColorAnimation { duration: 140; easing.type: Easing.OutCubic } }
+
+        Text {
+            id: label
+            anchors.centerIn: parent
+            text: btn.text
+            font.pixelSize: 13
+            font.family: "Microsoft YaHei UI"
+            font.weight: Font.DemiBold
+            color: btn.primary ? "white" : btn.danger ? btn.hovered ? "#a4262c" : "#5e6670" : "#2f343a"
+            renderType: Text.NativeRendering
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onEntered: btn.hovered = true
+            onExited: { btn.hovered = false; btn.pressed = false }
+            onPressed: btn.pressed = true
+            onReleased: btn.pressed = false
+            onClicked: btn.clicked()
+        }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 12
+        spacing: 12
+
+        Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.preferredHeight: Math.max(260, root.height * 0.6)
+
+            Rectangle {
+                anchors.fill: parent
+                radius: 10
+                color: "#111315"
+                border.width: 1
+                border.color: "#d8dde3"
+                clip: true
+
+                DisplayScreen {
+                    anchors.fill: parent
+                    anchors.margins: -8
+                    displayState: root.displayState
+                    frameSource: root.frameSource
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: parent.radius
+                    color: Qt.rgba(1, 1, 1, 0.05)
+                }
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: parent.height * 0.34
+                    gradient: Gradient {
+                        GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.12) }
+                        GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.0) }
+                    }
+                }
+            }
+        }
+
         FluentPane {
             Layout.fillWidth: true
-            Layout.preferredHeight: 300
+            Layout.fillHeight: true
+            Layout.preferredHeight: Math.max(240, root.height * 0.4)
             title: "处理信息"
             icon: ImagePath.info
-            contentBottomMargin: 4
+            contentTopMargin: 14
+            contentLeftMargin: 16
+            contentRightMargin: 16
+            contentBottomMargin: 14
 
             ColumnLayout {
                 anchors.fill: parent
-                spacing: 0
+                spacing: 10
 
-                // ── 总进度 ──
-                ColumnLayout {
+                RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: 4
-                    spacing: 2
+                    spacing: 12
 
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Text {
-                            text: "总进度"
-                            font.pixelSize: 13
-                            font.family: "Microsoft YaHei UI"
-                            font.weight: Font.DemiBold
-                            color: "#1a1a1a"
-                            renderType: Text.NativeRendering
-                        }
-                        Item { Layout.fillWidth: true }
-                        Text {
-                            text: root.totalCurrent + " / " + root.totalCount
-                                  + "   " + Math.round(root.totalProgress * 100) + "%"
-                            font.pixelSize: 13
-                            font.family: "Microsoft YaHei UI"
-                            font.weight: Font.DemiBold
-                            color: "#0078D4"
-                            renderType: Text.NativeRendering
-                        }
+                    Text {
+                        text: root.pctText
+                        font.pixelSize: 32
+                        font.family: "Segoe UI Variable Display"
+                        font.weight: Font.Bold
+                        color: root.barColor
+                        renderType: Text.NativeRendering
                     }
 
-                    Rectangle {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        height: 6
-                        radius: 3
-                        color: "#e8e8e8"
+                        spacing: 2
 
-                        Rectangle {
-                            width: parent.width * Math.max(0.0, Math.min(1.0, root.totalProgress))
-                            height: parent.height
-                            radius: parent.radius
-                            color: "#0078D4"
-                            Behavior on width {
-                                NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
-                            }
+                        Text {
+                            text: root.totalCount > 0 ? "总任务 " + root.totalCurrent + " / " + root.totalCount : "已处理任务 " + root.totalCurrent
+                            font.pixelSize: 13
+                            font.family: "Microsoft YaHei UI"
+                            font.weight: Font.DemiBold
+                            color: "#1f252b"
+                            renderType: Text.NativeRendering
+                        }
+
+                        Text {
+                            text: "预计剩余 " + root.estimatedRemaining
+                            font.pixelSize: 12
+                            font.family: "Microsoft YaHei UI"
+                            color: "#7c8793"
+                            renderType: Text.NativeRendering
                         }
                     }
                 }
 
-                // ── 当前阶段：文字行（固定高度避免字体 metrics 撑开） ──
-                Item {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 16
-                    Layout.minimumHeight: 16
-                    Layout.maximumHeight: 16
-
-                    RowLayout {
-                        anchors.fill: parent
-
-                        Text {
-                            text: "当前阶段: " + root.stageName
-                            font.pixelSize: 12
-                            font.family: "Microsoft YaHei UI"
-                            color: "#555555"
-                            renderType: Text.NativeRendering
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                        Item { Layout.fillWidth: true }
-                        Text {
-                            text: Math.round(root.stageProgress * 100) + "%"
-                            font.pixelSize: 12
-                            font.family: "Microsoft YaHei UI"
-                            color: "#888888"
-                            renderType: Text.NativeRendering
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                    }
-                }
-
-                // ── 当前阶段：进度条（固定高度，与文字行分离，精确控制间距） ──
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 4
-                    Layout.minimumHeight: 4
-                    Layout.maximumHeight: 4
-                    radius: 2
-                    color: "#f0f0f0"
+                    height: 8
+                    radius: 4
+                    color: "#e5e8ec"
+                    clip: true
 
                     Rectangle {
-                        width: parent.width * Math.max(0.0, Math.min(1.0, root.stageProgress))
+                        id: totalFill
+                        width: parent.width * root.tp
                         height: parent.height
                         radius: parent.radius
-                        color: "#60bdff"
-                        Behavior on width {
-                            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-                        }
-                    }
-                }
+                        color: root.barColor
+                        Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+                        Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
-                // ── 预计剩余时间（与进度条间隙 2px） ──
-                Item {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 2
-                    Layout.preferredHeight: 13
-                    Layout.minimumHeight: 13
-                    Layout.maximumHeight: 13
-
-                    Row {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 4
-
-                        Image {
-                            source: ImagePath.clock
-                            sourceSize.width: 13
-                            sourceSize.height: 13
+                        Item {
+                            id: glowHead
+                            width: 24
+                            height: 24
+                            anchors.right: parent.right
+                            anchors.rightMargin: -8
                             anchors.verticalCenter: parent.verticalCenter
-                            opacity: 0.5
-                        }
+                            visible: root.processingStatus === 0 && root.tp > 0.0 && root.tp < 1.0
 
-                        Text {
-                            text: "预计剩余: " + root.estimatedRemaining
-                            font.pixelSize: 12
-                            font.family: "Microsoft YaHei UI"
-                            color: "#888888"
-                            renderType: Text.NativeRendering
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
-                }
-
-                // ── 分割线 ──
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 4
-                    height: 1
-                    color: "#f0f0f0"
-                }
-
-                // ── 底部统计（四列严格等宽） ──
-                Item {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 3
-                    implicitHeight: statsRow.implicitHeight
-                    Layout.preferredHeight: implicitHeight
-
-                    Row {
-                        id: statsRow
-                        width: parent.width
-
-                        // 项目编号
-                        Column {
-                            width: statsRow.width / 4
-                            spacing: 3
-
-                            Text {
-                                text: "项目编号"
-                                font.pixelSize: 11
-                                font.family: "Microsoft YaHei UI"
-                                color: "#888888"
-                                renderType: Text.NativeRendering
+                            Rectangle {
+                                id: glowBlob
+                                anchors.centerIn: parent
+                                width: 14
+                                height: 14
+                                radius: 7
+                                color: root.barColor
+                                opacity: 0.78
                             }
-                            Text {
-                                text: root.projectId
-                                font.pixelSize: 16
-                                font.family: "Microsoft YaHei UI"
-                                font.weight: Font.DemiBold
-                                color: "#1a1a1a"
-                                renderType: Text.NativeRendering
+
+                            MultiEffect {
+                                anchors.fill: glowBlob
+                                anchors.margins: -8
+                                source: glowBlob
+                                blurEnabled: true
+                                blur: 1.0
+                                blurMax: 32
+                                brightness: 0.35
                             }
-                        }
 
-                        // 已用时间
-                        Column {
-                            width: statsRow.width / 4
-                            spacing: 3
-
-                            Text {
-                                text: "已用时间"
-                                font.pixelSize: 11
-                                font.family: "Microsoft YaHei UI"
-                                color: "#888888"
-                                renderType: Text.NativeRendering
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 6
+                                height: 6
+                                radius: 3
+                                color: "white"
+                                opacity: 0.88
                             }
-                            Text {
-                                text: root.elapsedTime
-                                font.pixelSize: 16
-                                font.family: "Microsoft YaHei UI"
-                                font.weight: Font.DemiBold
-                                color: "#1a1a1a"
-                                renderType: Text.NativeRendering
-                            }
-                        }
 
-                        // 处理速度
-                        Column {
-                            width: statsRow.width / 4
-                            spacing: 3
-
-                            Text {
-                                text: "处理速度"
-                                font.pixelSize: 11
-                                font.family: "Microsoft YaHei UI"
-                                color: "#888888"
-                                renderType: Text.NativeRendering
-                            }
-                            Row {
-                                spacing: 1
-
-                                Text {
-                                    text: root.processingSpeed.toFixed(1)
-                                    font.pixelSize: 16
-                                    font.family: "Microsoft YaHei UI"
-                                    font.weight: Font.DemiBold
-                                    color: "#1a1a1a"
-                                    renderType: Text.NativeRendering
-                                }
-                                Text {
-                                    text: "x"
-                                    font.pixelSize: 14
-                                    font.family: "Microsoft YaHei UI"
-                                    font.weight: Font.DemiBold
-                                    color: "#888888"
-                                    renderType: Text.NativeRendering
-                                }
-                            }
-                        }
-
-                        // 状态
-                        Column {
-                            width: statsRow.width / 4
-                            spacing: 3
-
-                            Text {
-                                text: "状态"
-                                font.pixelSize: 11
-                                font.family: "Microsoft YaHei UI"
-                                color: "#888888"
-                                renderType: Text.NativeRendering
-                            }
-                            Text {
-                                text: root.processingStatus === 1 ? "完成"
-                                    : root.processingStatus === 2 ? "错误"
-                                    : "进行中"
-                                font.pixelSize: 16
-                                font.family: "Microsoft YaHei UI"
-                                font.weight: Font.DemiBold
-                                color: root.processingStatus === 1 ? "#107C10"
-                                     : root.processingStatus === 2 ? "#C42B1C"
-                                     : "#0078D4"
-                                renderType: Text.NativeRendering
+                            SequentialAnimation on opacity {
+                                running: glowHead.visible
+                                loops: Animation.Infinite
+                                NumberAnimation { to: 0.56; duration: 520; easing.type: Easing.InOutQuad }
+                                NumberAnimation { to: 1.0; duration: 520; easing.type: Easing.InOutQuad }
                             }
                         }
                     }
                 }
-            }
-        }
 
-        // ── 按钮行 ──────────────────────────────
-        // 运行中：中止按钮占满整行
-        // 完成时：继续(3/4) + 打开输出目录(1/4)
-        // 错误时：继续按钮占满整行
-        Item {
-            Layout.fillWidth: true
-            implicitHeight: 36
-
-            // 主操作按钮
-            Rectangle {
-                id: actionBtn
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                // 仅完成状态 (1) 时缩为 3/4，为目录按钮留空
-                width: root.processingStatus === 1
-                       ? parent.width * 3 / 4 - 4
-                       : parent.width
-                radius: 4
-                border.color: Qt.rgba(0, 0, 0, 0.12)
-                border.width: 1
-
-                property bool btnHovered: false
-                property bool btnPressed: false
-
-                readonly property color baseColor: root.processingStatus === 0 ? "#C42B1C" : "#107C10"
-                color: btnPressed ? Qt.darker(baseColor, 1.12)
-                     : btnHovered ? Qt.lighter(baseColor, 1.10)
-                     : baseColor
-
-                Behavior on width {
-                    NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-                }
-                Behavior on color {
-                    ColorAnimation { duration: 100 }
-                }
-
-                Row {
-                    anchors.centerIn: parent
+                RowLayout {
+                    Layout.fillWidth: true
                     spacing: 6
 
-                    // 白色图标
-                    Image {
-                        id: actionIcon
-                        source: root.processingStatus === 0 ? ImagePath.cancel : ImagePath.ok
-                        sourceSize.width: 15
-                        sourceSize.height: 15
-                        anchors.verticalCenter: parent.verticalCenter
-                        layer.enabled: true
-                        layer.effect: MultiEffect {
-                            brightness: 1.0
+                    Text {
+                        text: root.stageName.length > 0 ? root.stageName : "准备中"
+                        Layout.fillWidth: true
+                        font.pixelSize: 12
+                        font.family: "Microsoft YaHei UI"
+                        color: "#4e5964"
+                        elide: Text.ElideRight
+                        renderType: Text.NativeRendering
+                    }
+
+                    Text {
+                        text: Math.round(root.sp * 100) + "%"
+                        font.pixelSize: 12
+                        font.family: "Microsoft YaHei UI"
+                        color: "#6c7783"
+                        renderType: Text.NativeRendering
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 4
+                    radius: 2
+                    color: "#edf0f3"
+                    clip: true
+
+                    Rectangle {
+                        width: parent.width * root.sp
+                        height: parent.height
+                        radius: parent.radius
+                        color: Qt.rgba(0, 120 / 255, 212 / 255, 0.58)
+                        Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 1
+                    color: "#edf1f4"
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 10
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 10
+
+                        StatCard {
+                            Layout.fillWidth: true
+                            title: "已用时间"
+                            value: root.elapsedTime
+                            note: "实时累计"
+                            mono: true
+                            big: true
+                        }
+
+                        StatCard {
+                            Layout.fillWidth: true
+                            title: "处理速度"
+                            value: root.processingSpeed.toFixed(1) + "x"
+                            note: "平均速度"
+                            mono: true
+                            big: true
+                        }
+
+                        StatCard {
+                            Layout.fillWidth: true
+                            title: "当前状态"
+                            value: root.statusText
+                            note: "项目 " + root.projectId
+                            valueColor: root.processingStatus === 1 ? "#107C10" : root.processingStatus === 2 ? "#C42B1C" : "#0078D4"
                         }
                     }
 
-                    Text {
-                        text: root.processingStatus === 0 ? "中止" : "继续"
-                        font.pixelSize: 13
-                        font.family: "Microsoft YaHei UI"
-                        color: "white"
-                        renderType: Text.NativeRendering
-                        anchors.verticalCenter: parent.verticalCenter
+                    Item {
+                        Layout.preferredWidth: Math.max(cancelBtn.implicitWidth, doneActions.implicitWidth, errorBtn.implicitWidth)
+                        Layout.minimumWidth: 132
+                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                        implicitHeight: 40
+
+                        Item {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: cancelBtn.implicitWidth
+                            height: cancelBtn.implicitHeight
+                            visible: opacity > 0.01
+                            opacity: root.processingStatus === 0 ? 1.0 : 0.0
+                            scale: root.processingStatus === 0 ? 1.0 : 0.95
+                            Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                            Behavior on scale { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+
+                            ActionButton {
+                                id: cancelBtn
+                                anchors.right: parent.right
+                                text: "中止"
+                                danger: true
+                                onClicked: root.cancelRequested()
+                            }
+                        }
+
+                        RowLayout {
+                            id: doneActions
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 8
+                            visible: opacity > 0.01
+                            opacity: root.processingStatus === 1 ? 1.0 : 0.0
+                            scale: root.processingStatus === 1 ? 1.0 : 0.95
+                            Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                            Behavior on scale { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+
+                            ActionButton {
+                                text: "继续"
+                                onClicked: root.continueRequested()
+                            }
+
+                            ActionButton {
+                                text: "打开输出目录"
+                                primary: true
+                                onClicked: root.openOutputDir()
+                            }
+                        }
+
+                        Item {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: errorBtn.implicitWidth
+                            height: errorBtn.implicitHeight
+                            visible: opacity > 0.01
+                            opacity: root.processingStatus === 2 ? 1.0 : 0.0
+                            scale: root.processingStatus === 2 ? 1.0 : 0.95
+                            Behavior on opacity { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                            Behavior on scale { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+
+                            ActionButton {
+                                id: errorBtn
+                                anchors.right: parent.right
+                                text: "继续"
+                                primary: true
+                                onClicked: root.continueRequested()
+                            }
+                        }
                     }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onEntered:  { actionBtn.btnHovered = true }
-                    onExited:   { actionBtn.btnHovered = false; actionBtn.btnPressed = false }
-                    onPressed:  { actionBtn.btnPressed = true }
-                    onReleased: { actionBtn.btnPressed = false }
-                    onClicked:  {
-                        if (root.processingStatus === 0)
-                            root.cancelRequested()
-                        else
-                            root.continueRequested()
-                    }
-                }
-            }
-
-            // 打开输出目录按钮：仅完成 (status === 1) 时显示
-            Rectangle {
-                id: dirBtn
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                width: parent.width / 4 - 4
-                radius: 4
-                color: dirBtnPressed ? "#ebebeb" : dirBtnHovered ? "#f5f5f5" : "#ffffff"
-                border.color: "#e0e0e0"
-                border.width: 1
-                opacity: root.processingStatus === 1 ? 1.0 : 0.0
-                visible: opacity > 0
-
-                property bool dirBtnHovered: false
-                property bool dirBtnPressed: false
-
-                Behavior on opacity {
-                    NumberAnimation { duration: 200 }
-                }
-                Behavior on color {
-                    ColorAnimation { duration: 100 }
-                }
-
-                Row {
-                    anchors.centerIn: parent
-                    spacing: 5
-
-                    Image {
-                        source: ImagePath.folder
-                        sourceSize.width: 15
-                        sourceSize.height: 15
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                    Text {
-                        text: "打开输出目录"
-                        font.pixelSize: 12
-                        font.family: "Microsoft YaHei UI"
-                        color: "#1a1a1a"
-                        renderType: Text.NativeRendering
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onEntered:  { dirBtn.dirBtnHovered = true }
-                    onExited:   { dirBtn.dirBtnHovered = false; dirBtn.dirBtnPressed = false }
-                    onPressed:  { dirBtn.dirBtnPressed = true }
-                    onReleased: { dirBtn.dirBtnPressed = false }
-                    onClicked:  root.openOutputDir()
                 }
             }
         }
