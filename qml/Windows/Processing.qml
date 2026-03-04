@@ -18,7 +18,7 @@ Item {
     property real processingSpeed: 0.0
     property string estimatedRemaining: "0 秒"
     property string projectId: ""
-    property int processingStatus: 0
+    property int processingStatus: 0 // 0: 进行中, 1: 完成, 2: 错误
     property int displayState: 0
     property url frameSource: ""
 
@@ -28,8 +28,12 @@ Item {
 
     readonly property real tp: Math.max(0.0, Math.min(1.0, totalProgress))
     readonly property real sp: Math.max(0.0, Math.min(1.0, stageProgress))
+    readonly property real displayTotalProgress: processingStatus === 1 ? 1.0 : tp
+    readonly property real displayStageProgress: processingStatus === 1 ? 1.0 : sp
+    readonly property int displayCurrentCount: processingStatus === 1 && totalCount > 0 ? totalCount : totalCurrent
+    readonly property string displayStageName: processingStatus === 1 ? "完成" : (stageName.length > 0 ? stageName : "准备中")
     readonly property color barColor: processingStatus === 1 ? "#107C10" : processingStatus === 2 ? "#C42B1C" : "#0078D4"
-    readonly property string pctText: Math.round(tp * 100) + "%"
+    readonly property string pctText: Math.round(displayTotalProgress * 100) + "%"
     readonly property string statusText: processingStatus === 1 ? "完成" : processingStatus === 2 ? "错误" : "进行中"
 
     Component.onCompleted: {
@@ -150,6 +154,14 @@ Item {
         anchors.margins: 12
         spacing: 12
 
+        TextMetrics {
+            id: pctMetrics
+            font.family: "Segoe UI Variable Display"
+            font.pixelSize: 32
+            font.weight: Font.Bold
+            text: "100%"
+        }
+
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -210,6 +222,8 @@ Item {
 
                     Text {
                         text: root.pctText
+                        width: pctMetrics.advanceWidth + 2
+                        horizontalAlignment: Text.AlignRight
                         font.pixelSize: 32
                         font.family: "Segoe UI Variable Display"
                         font.weight: Font.Bold
@@ -222,19 +236,11 @@ Item {
                         spacing: 2
 
                         Text {
-                            text: root.totalCount > 0 ? "总任务 " + root.totalCurrent + " / " + root.totalCount : "已处理任务 " + root.totalCurrent
+                            text: root.totalCount > 0 ? "总任务 " + root.displayCurrentCount + " / " + root.totalCount : "已处理任务 " + root.displayCurrentCount
                             font.pixelSize: 13
                             font.family: "Microsoft YaHei UI"
                             font.weight: Font.DemiBold
                             color: "#1f252b"
-                            renderType: Text.NativeRendering
-                        }
-
-                        Text {
-                            text: "预计剩余 " + root.estimatedRemaining
-                            font.pixelSize: 12
-                            font.family: "Microsoft YaHei UI"
-                            color: "#7c8793"
                             renderType: Text.NativeRendering
                         }
                     }
@@ -249,7 +255,7 @@ Item {
 
                     Rectangle {
                         id: totalFill
-                        width: parent.width * root.tp
+                        width: parent.width * root.displayTotalProgress
                         height: parent.height
                         radius: parent.radius
                         color: root.barColor
@@ -263,7 +269,7 @@ Item {
                             anchors.right: parent.right
                             anchors.rightMargin: -8
                             anchors.verticalCenter: parent.verticalCenter
-                            visible: root.processingStatus === 0 && root.tp > 0.0 && root.tp < 1.0
+                            visible: root.processingStatus === 0 && root.displayTotalProgress > 0.0 && root.displayTotalProgress < 1.0
 
                             Rectangle {
                                 id: glowBlob
@@ -309,7 +315,7 @@ Item {
                     spacing: 6
 
                     Text {
-                        text: root.stageName.length > 0 ? root.stageName : "准备中"
+                        text: root.displayStageName
                         Layout.fillWidth: true
                         font.pixelSize: 12
                         font.family: "Microsoft YaHei UI"
@@ -319,10 +325,19 @@ Item {
                     }
 
                     Text {
-                        text: Math.round(root.sp * 100) + "%"
+                        text: Math.round(root.displayStageProgress * 100) + "%"
                         font.pixelSize: 12
                         font.family: "Microsoft YaHei UI"
                         color: "#6c7783"
+                        renderType: Text.NativeRendering
+                    }
+
+                    Text {
+                        visible: root.processingStatus === 0 && root.estimatedRemaining.length > 0
+                        text: "预计剩余 " + root.estimatedRemaining
+                        font.pixelSize: 12
+                        font.family: "Microsoft YaHei UI"
+                        color: "#7c8793"
                         renderType: Text.NativeRendering
                     }
                 }
@@ -335,7 +350,7 @@ Item {
                     clip: true
 
                     Rectangle {
-                        width: parent.width * root.sp
+                        width: parent.width * root.displayStageProgress
                         height: parent.height
                         radius: parent.radius
                         color: Qt.rgba(0, 120 / 255, 212 / 255, 0.58)
