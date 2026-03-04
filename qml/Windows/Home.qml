@@ -241,18 +241,84 @@ Item {
                             }
                         }
 
-                        // ── 开始处理按钮 ──
-                        Button {
-                            id: startButton
-                            text: "开始处理"
-                            highlighted: true
-                            icon.source: ImagePath.play
-                            Layout.fillWidth: true
-                            implicitHeight: 44
-                        }
                     }
+                }
+
+                // ── 为浮动按钮留出底部空间，防止遮挡最底部控件 ──
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 68
                 }
             }
         }
+    }
+
+    // ════════════════════════════════════════════════════════
+    //  浮动"开始处理"按钮 — 固定右下角，始终可见
+    //  Fluent 风格多层阴影（与 FluentPane 保持一致）
+    // ════════════════════════════════════════════════════════
+
+    // ── 阴影层（多层叠加，柔和投影） ──
+    Rectangle {
+        anchors.top: startFloatButton.top
+        anchors.bottom: startFloatButton.bottom
+        anchors.left: startFloatButton.left
+        anchors.right: startFloatButton.right
+        anchors.margins: -1
+        radius: 6
+        color: "transparent"
+        border.color: Qt.rgba(0, 0, 0, 0.12)
+        border.width: 1
+        z: 99
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -2
+            radius: parent.radius + 2
+            color: "transparent"
+            border.color: Qt.rgba(0, 0, 0, 0.07)
+            border.width: 1
+            z: -1
+        }
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -5
+            radius: parent.radius + 5
+            color: "transparent"
+            border.color: Qt.rgba(0, 0, 0, 0.04)
+            border.width: 1
+            z: -2
+        }
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -9
+            radius: parent.radius + 9
+            color: "transparent"
+            border.color: Qt.rgba(0, 0, 0, 0.02)
+            border.width: 1
+            z: -3
+        }
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -14
+            radius: parent.radius + 14
+            color: "transparent"
+            border.color: Qt.rgba(0, 0, 0, 0.008)
+            border.width: 1
+            z: -4
+        }
+    }
+
+    Button {
+        id: startFloatButton
+        text: "开始处理"
+        highlighted: true
+        icon.source: ImagePath.play
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.rightMargin: 24
+        anchors.bottomMargin: 24
+        height: 44
+        z: 100
     }
 }
