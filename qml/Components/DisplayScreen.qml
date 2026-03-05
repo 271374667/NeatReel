@@ -5,13 +5,14 @@ import "../"
 Item {
     id: root
     width: 640
-    height: 480 
+    height: 480
 
     // ══════════════════════════════════════
     //  状态枚举
     // ══════════════════════════════════════
     enum State {
         Waiting,    // 等待任务
+        Loading,    // 加载中
         Normal,     // 正常显示画面
         Error       // 错误
     }
@@ -19,7 +20,7 @@ Item {
     // ══════════════════════════════════════
     //  公共属性
     // ══════════════════════════════════════
-    property int displayState: DisplayScreen.State.Waiting   // 当前显示状态
+    property int displayState: DisplayScreen.State.Loading   // 当前显示状态
 
     property url frameSource: ""            // 后端传来的画面 source（image:// 或 file:// 等）
     property real cornerRadius: 8           // 圆角半径
@@ -29,11 +30,49 @@ Item {
     property int iconSize: 96                  // 状态图标尺寸
     property int textSize: 18                  // 提示文字大小
     property color textColor: "#888888"        // 提示文字颜色
+    property int loadingTimeoutMs: 3000        // Loading 超时毫秒（可修改）
+    property string defaultErrorText: "无法打开该视频"
+    property string loadingTimeoutErrorText: "视频加载超时\n请检查视频文件是否正常"
+    property string errorText: defaultErrorText
 
     // ── 便捷函数 ──
-    function setWaiting() { displayState = DisplayScreen.State.Waiting; }
-    function setNormal()  { displayState = DisplayScreen.State.Normal;  }
-    function setError()   { displayState = DisplayScreen.State.Error;   }
+    function setWaiting() {
+        displayState = DisplayScreen.State.Waiting;
+    }
+    function setLoading() {
+        displayState = DisplayScreen.State.Loading;
+        loadingTimeoutTimer.restart();
+    }
+    function setNormal() {
+        displayState = DisplayScreen.State.Normal;
+    }
+    function setError(message) {
+        if (message !== undefined && message !== null && message !== "") {
+            errorText = message;
+        } else {
+            errorText = defaultErrorText;
+        }
+        displayState = DisplayScreen.State.Error;
+    }
+
+    onDisplayStateChanged: {
+        if (displayState === DisplayScreen.State.Loading) {
+            loadingTimeoutTimer.restart();
+        } else {
+            loadingTimeoutTimer.stop();
+        }
+    }
+
+    Timer {
+        id: loadingTimeoutTimer
+        interval: root.loadingTimeoutMs
+        repeat: false
+        onTriggered: {
+            if (root.displayState === DisplayScreen.State.Loading) {
+                root.setError(root.loadingTimeoutErrorText);
+            }
+        }
+    }
 
     // ══════════════════════════════════════
     //  阴影层（与 FluentPane 风格统一）
@@ -83,15 +122,16 @@ Item {
         anchors.fill: parent
         anchors.margins: 8          // 为阴影留出空间
         radius: root.cornerRadius
-        color: root.displayState === DisplayScreen.State.Normal
-               ? root.placeholderBg
-               : root.backgroundColor
+        color: root.displayState === DisplayScreen.State.Normal ? root.placeholderBg : root.backgroundColor
         border.color: root.borderColor
         border.width: 1
         clip: true
 
         Behavior on color {
-            ColorAnimation { duration: 250; easing.type: Easing.OutCubic }
+            ColorAnimation {
+                duration: 250
+                easing.type: Easing.OutCubic
+            }
         }
 
         // ── 顶部高光线（Fluent2 微妙亮边） ──
@@ -115,7 +155,10 @@ Item {
             opacity: root.displayState === DisplayScreen.State.Waiting ? 1 : 0
 
             Behavior on opacity {
-                NumberAnimation { duration: 300; easing.type: Easing.InOutCubic }
+                NumberAnimation {
+                    duration: 300
+                    easing.type: Easing.InOutCubic
+                }
             }
 
             Image {
@@ -139,6 +182,14 @@ Item {
             }
         }
 
+        Loading {
+            id: loadingContent
+            anchors.fill: parent
+            text: "视频加载中"
+            running: root.displayState === DisplayScreen.State.Loading
+            crop: true
+        }
+
         // ─────────────────────────────────
         //  错误状态
         // ─────────────────────────────────
@@ -150,7 +201,10 @@ Item {
             opacity: root.displayState === DisplayScreen.State.Error ? 1 : 0
 
             Behavior on opacity {
-                NumberAnimation { duration: 300; easing.type: Easing.InOutCubic }
+                NumberAnimation {
+                    duration: 300
+                    easing.type: Easing.InOutCubic
+                }
             }
 
             Image {
@@ -164,13 +218,14 @@ Item {
             }
 
             Text {
-                text: "无法打开该视频"
+                text: root.errorText
                 font.pixelSize: root.textSize
                 font.family: "Microsoft YaHei UI"
                 font.weight: Font.Normal
-                color: "#c42b1c"
+                color: "#d83b01"
                 anchors.horizontalCenter: parent.horizontalCenter
                 renderType: Text.NativeRendering
+                horizontalAlignment: Text.AlignHCenter
             }
         }
 
@@ -181,16 +236,16 @@ Item {
             id: frameImage
             anchors.fill: parent
             fillMode: Image.PreserveAspectFit
-            source: root.displayState === DisplayScreen.State.Normal
-                    ? root.frameSource
-                    : ""
+            source: root.displayState === DisplayScreen.State.Normal ? root.frameSource : ""
             visible: opacity > 0
-            opacity: (root.displayState === DisplayScreen.State.Normal
-                      && root.frameSource.toString().length > 0) ? 1 : 0
+            opacity: (root.displayState === DisplayScreen.State.Normal && root.frameSource.toString().length > 0) ? 1 : 0
             cache: false       // 实时画面不缓存
 
             Behavior on opacity {
-                NumberAnimation { duration: 300; easing.type: Easing.InOutCubic }
+                NumberAnimation {
+                    duration: 300
+                    easing.type: Easing.InOutCubic
+                }
             }
         }
 
