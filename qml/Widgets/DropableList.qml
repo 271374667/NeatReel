@@ -363,9 +363,13 @@ Item {
                     anchors.topMargin: 1
                     anchors.bottomMargin: 1
                     radius: 6
-                    color: delegateRoot.isBeingDragged ? "#f5f5f5" : (delegateRoot.isSelected ? "#f0f6ff" : (itemMouse.containsMouse ? "#f8f8f8" : "#ffffff"))
+                    color: delegateRoot.isBeingDragged ? "#f5f5f5" : (delegateRoot.isSelected ? "#f0f6ff" : (cardHover.hovered ? "#f8f8f8" : "#ffffff"))
                     border.color: delegateRoot.isBeingDragged ? "#e0e0e0" : "transparent"
                     border.width: delegateRoot.isBeingDragged ? 1 : 0
+
+                    HoverHandler {
+                        id: cardHover
+                    }
 
                     // 拖起时原位置变为占位符
                     opacity: delegateRoot.isBeingDragged ? 0.35 : 1.0
@@ -541,10 +545,11 @@ Item {
                         id: itemMouse
                         anchors.fill: parent
                         hoverEnabled: true
+                        preventStealing: true
                         pressAndHoldInterval: 150
                         cursorShape: (dragState.isDragging || pressed)
                                      ? Qt.ClosedHandCursor
-                                     : (containsMouse ? Qt.OpenHandCursor : Qt.ArrowCursor)
+                                     : (cardHover.hovered ? Qt.OpenHandCursor : Qt.ArrowCursor)
 
                         property real pressStartY: 0
                         property bool dragActive: false
@@ -569,7 +574,8 @@ Item {
                         }
 
                         onPressAndHold: function(mouse) {
-                            // 开始拖拽
+                            // 开始拖拽，禁用列表滚动防止 Flickable 抢占事件
+                            listView.interactive = false;
                             dragActive = true;
                             dragState.draggedIndex = delegateRoot.index;
                             dragState.isDragging = true;
@@ -585,22 +591,25 @@ Item {
                         onPositionChanged: function(mouse) {
                             if (!dragActive || !dragState.isDragging) return;
 
-                            // 计算鼠标在 ListView 中的 Y 坐标
-                            var posInList = mapToItem(listView.contentItem, mouse.x, mouse.y);
-                            dragState.dragMouseY = posInList.y;
+                            // 计算鼠标在 ListView 中的 Y 坐标（使用视口坐标转内容坐标）
+                            var posInView = mapToItem(listView, mouse.x, mouse.y);
+                            var contentY = posInView.y + listView.contentY;
 
-                            // 记录鼠标在根坐标系中的位置
+                            // 记录鼠标在根坐标系中的位置（用于浮动 ghost）
                             var posInRoot = mapToItem(root, mouse.x, mouse.y);
                             dragState.dragMouseRootX = posInRoot.x;
                             dragState.dragMouseRootY = posInRoot.y;
 
-                            // 根据鼠标位置计算目标放置索引
-                            var targetIdx = Math.floor(posInList.y / 64); // 62 height + 2 spacing
+                            // 根据内容坐标计算目标放置索引
+                            var targetIdx = Math.floor(contentY / 64); // 62 height + 2 spacing
                             targetIdx = Math.max(0, Math.min(targetIdx, videoModel.count - 1));
                             dragState.dropTargetIndex = targetIdx;
                         }
 
                         onReleased: function(mouse) {
+                            // 恢复列表滚动
+                            listView.interactive = true;
+
                             if (dragActive && dragState.isDragging) {
                                 // 执行实际的 model 移动
                                 var fromIdx = dragState.draggedIndex;
@@ -680,6 +689,20 @@ Item {
             }
         }
 
+            // ── 添加视频按钮 ──
+            Button {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                text: "添加视频"
+                icon.source: ImagePath.add
+                onClicked: fileDialog.open()
+
+                HoverHandler {
+                    cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                }
+            }
+        }
+
         // ── 右键菜单（空白区域） ──
         Menu {
             id: emptySpaceMenu
@@ -716,6 +739,7 @@ Item {
         // ── 鼠标交互区域（右键菜单 + 左键空白取消选择） ──
         MouseArea {
             anchors.fill: parent
+            z: -1
             hoverEnabled: true
             acceptedButtons: Qt.RightButton | Qt.LeftButton
             property bool hoverOnItem: {
@@ -757,20 +781,6 @@ Item {
                         root.clearSelection();
                         emptySpaceMenu.popup();
                     }
-                }
-            }
-        }
-
-            // ── 添加视频按钮 ──
-            Button {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 36
-                text: "添加视频"
-                icon.source: ImagePath.add
-                onClicked: fileDialog.open()
-                
-                HoverHandler {
-                    cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                 }
             }
         }
