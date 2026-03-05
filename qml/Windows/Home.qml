@@ -15,6 +15,7 @@ Item {
 
     property bool orientationDebouncing: false
     property bool topActionButtonsDebouncing: false
+    property string previewFrameSource: ""
 
     function beginOrientationDebounce() {
         orientationDebouncing = true
@@ -24,6 +25,15 @@ Item {
     function beginTopActionButtonsDebounce() {
         topActionButtonsDebouncing = true
         topActionButtonsDebounceTimer.restart()
+    }
+
+    function updateRotationAngle(delta) {
+        const current = ((videoInfoItem.rotationAngle % 360) + 360) % 360
+        var newAngle = (current + delta + 360) % 360
+        videoInfoItem.rotationAngle = newAngle
+        if (typeof dropList !== "undefined" && dropList.currentIndex >= 0) {
+            dropList.setItemRotation(dropList.currentIndex, newAngle)
+        }
     }
 
     Timer {
@@ -74,7 +84,19 @@ Item {
             Layout.fillHeight: true
 
             DropableList {
+                id: dropList
                 anchors.fill: parent
+                onLeftclicked: function(data) {
+                    if (data && data.filePath) {
+                        videoInfoItem.filePath = data.filePath
+                        var pathStr = data.filePath.toString().replace(/\\/g, "/")
+                        var parts = pathStr.split("/")
+                        videoInfoItem.fileName = parts[parts.length - 1]
+                        if (data.rotation !== undefined) {
+                            videoInfoItem.rotationAngle = data.rotation
+                        }
+                    }
+                }
             }
         }
 
@@ -117,11 +139,13 @@ Item {
                             id: displayScreen
                             Layout.fillWidth: true
                             Layout.preferredHeight: Math.max(180, width * 9 / 16)
+
+                            frameSource: root.previewFrameSource
                         }
 
-                        // ── 预览去黑边效果 ──
+                        // ── 预览去黑边效果 ── 
                         Button {
-                            text: "预览去黑边的效果"
+                            text: "预览原视频(不去黑边)"
                             Layout.fillWidth: true
                             icon.source: ImagePath.crop
                             enabled: !root.topActionButtonsDebouncing
@@ -139,7 +163,10 @@ Item {
                                 Layout.fillWidth: true
                                 icon.source: ImagePath.clockwise
                                 enabled: !root.topActionButtonsDebouncing
-                                onClicked: root.beginTopActionButtonsDebounce()
+                                onClicked: {
+                                    root.beginTopActionButtonsDebounce()
+                                    root.updateRotationAngle(90)
+                                }
                                 HandCursor {}
                             }
 
@@ -148,7 +175,10 @@ Item {
                                 Layout.fillWidth: true
                                 icon.source: ImagePath.counterClockwise
                                 enabled: !root.topActionButtonsDebouncing
-                                onClicked: root.beginTopActionButtonsDebounce()
+                                onClicked: {
+                                    root.beginTopActionButtonsDebounce()
+                                    root.updateRotationAngle(-90)
+                                }
                                 HandCursor {}
                             }
                         }
@@ -161,6 +191,7 @@ Item {
                             fileName: "示例视频_01.mp4"
                             filePath: "C:/Users/Videos/示例视频_01.mp4"
                             durationAndResolution: "00:15:30 / 1920x1080"
+                            rotationAngle: 90
                         }
                     }
                 }
@@ -197,6 +228,7 @@ Item {
                             }
 
                             RadioButton {
+                                id: landscapeRadio
                                 text: "横屏"
                                 checked: true
                                 ButtonGroup.group: orientationGroup
@@ -206,6 +238,7 @@ Item {
                             }
 
                             RadioButton {
+                                id: portraitRadio
                                 text: "竖屏"
                                 ButtonGroup.group: orientationGroup
                                 enabled: !root.orientationDebouncing
@@ -246,26 +279,6 @@ Item {
                                         ComboBox {
                                             Layout.fillWidth: true
                                             model: ["速度", "均衡", "质量"]
-                                            currentIndex: 1
-                                            HandCursor {}
-                                        }
-                                    }
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 4
-
-                                        Text {
-                                            text: "不合规默认旋转角度"
-                                            font.pixelSize: 12
-                                            font.family: "Microsoft YaHei UI"
-                                            color: "#5c6670"
-                                            renderType: Text.NativeRendering
-                                        }
-
-                                        ComboBox {
-                                            Layout.fillWidth: true
-                                            model: ["0°", "90°", "180°", "270°"]
                                             currentIndex: 1
                                             HandCursor {}
                                         }
@@ -368,6 +381,7 @@ Item {
         text: "开始处理"
         highlighted: true
         icon.source: ImagePath.play
+        onClicked: root.startProcessing()
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.rightMargin: 24
