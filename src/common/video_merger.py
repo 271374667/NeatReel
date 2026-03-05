@@ -39,34 +39,34 @@ class Orientation(Enum):
 
 
 class Rotation(Enum):
-    CLOCKWISE = 90
-    COUNTERCLOCKWISE = 270
-    UPSIDE_DOWN = 180
-    NOTHING = 0
+    ROTATE_0 = 0
+    ROTATE_90 = 90
+    ROTATE_180 = 180
+    ROTATE_270 = 270
 
 
-class VideoProcessSpeed(Enum):
-    SLOW = 0
-    NORMAL = 1
-    FAST = 2
+class VideoProcessMode(Enum):
+    QUALITY = 0
+    BALANCED = 1
+    SPEED = 2
 
 
 class VideoMerger:
-    # 各速度级别的编码器配置
+    # 各处理模式的编码器配置
     # 多线程不影响画质，所有级别均启用
-    # SLOW:   最慢速度，最高压缩率 → 最小体积，最佳画质
-    # NORMAL: 折中速度与体积，画质清晰
-    # FAST:   最快速度，最大体积，牺牲部分画质
-    _SPEED_CONFIGS: dict[VideoProcessSpeed, dict] = {
-        VideoProcessSpeed.SLOW: {
+    # QUALITY: 最高画质
+    # BALANCED: 均衡模式
+    # SPEED: 最高速度
+    _MODE_CONFIGS: dict[VideoProcessMode, dict] = {
+        VideoProcessMode.QUALITY: {
             "codec_options": {"preset": "slow", "bf": "0", "crf": "18"},
             "scale_flags": "bicubic",
         },
-        VideoProcessSpeed.NORMAL: {
+        VideoProcessMode.BALANCED: {
             "codec_options": {"preset": "medium", "bf": "0", "crf": "20"},
             "scale_flags": "bicubic",
         },
-        VideoProcessSpeed.FAST: {
+        VideoProcessMode.SPEED: {
             "codec_options": {
                 "preset": "ultrafast",
                 "tune": "fastdecode",
@@ -82,13 +82,13 @@ class VideoMerger:
         self,
         target_fps: int = 30,
         enable_border_detection: bool = True,
-        speed: VideoProcessSpeed = VideoProcessSpeed.NORMAL,
+        process_mode: VideoProcessMode = VideoProcessMode.BALANCED,
     ) -> None:
         if target_fps <= 0:
             raise ValueError("target_fps 必须是正整数")
         self.target_fps = target_fps
         self.enable_border_detection = enable_border_detection
-        self.speed = speed
+        self.process_mode = process_mode
         self.progress_reporter = ProgressReporter(enable_tqdm=True)
 
     def merge(
@@ -160,10 +160,10 @@ class VideoMerger:
                 effective_rotation = (
                     video_info.rotation
                     if video_info.rotation is not None
-                    else Rotation.CLOCKWISE
+                    else Rotation.ROTATE_90
                 )
             else:
-                effective_rotation = Rotation.NOTHING
+                effective_rotation = Rotation.ROTATE_0
 
             # 旋转后的尺寸
             if self._rotation_swaps_dimensions(effective_rotation):
@@ -219,7 +219,7 @@ class VideoMerger:
         # 在 mux 任何 packet 之前，先把视频和音频两个输出流都注册好，
         # 否则 MP4 muxer 在首次 mux() 时写入 header，
         # 遗漏后续添加的 stream，导致输出文件损坏。
-        speed_cfg = self._SPEED_CONFIGS[self.speed]
+        mode_cfg = self._MODE_CONFIGS[self.process_mode]
 
         out_video = output_container.add_stream("libx264", rate=target_fps_fraction)
         out_video.width = target_width
@@ -227,7 +227,7 @@ class VideoMerger:
         out_video.pix_fmt = "yuv420p"
         out_video.time_base = video_time_base
         out_video.thread_type = "AUTO"
-        out_video.codec_context.options = speed_cfg["codec_options"]
+        out_video.codec_context.options = mode_cfg["codec_options"]
 
         out_audio = output_container.add_stream("aac", rate=target_audio_rate)
         out_audio.time_base = audio_time_base
@@ -320,7 +320,7 @@ class VideoMerger:
                     target_width,
                     target_height,
                     effective_fps,
-                    speed_cfg["scale_flags"],
+                    mode_cfg["scale_flags"],
                 )
 
                 # 创建音频重采样器，统一采样率、采样格式和声道布局
@@ -455,7 +455,7 @@ class VideoMerger:
 
     @staticmethod
     def _rotation_swaps_dimensions(rotation: Rotation) -> bool:
-        return rotation in (Rotation.CLOCKWISE, Rotation.COUNTERCLOCKWISE)
+        return rotation in (Rotation.ROTATE_90, Rotation.ROTATE_270)
 
     @staticmethod
     def _get_most_compatible_resolution(
@@ -497,15 +497,15 @@ class VideoMerger:
             last = crop
 
         # 2. 旋转
-        if rotation == Rotation.CLOCKWISE:
+        if rotation == Rotation.ROTATE_90:
             transpose = graph.add("transpose", args="clock")
             last.link_to(transpose)
             last = transpose
-        elif rotation == Rotation.COUNTERCLOCKWISE:
+        elif rotation == Rotation.ROTATE_270:
             transpose = graph.add("transpose", args="cclock")
             last.link_to(transpose)
             last = transpose
-        elif rotation == Rotation.UPSIDE_DOWN:
+        elif rotation == Rotation.ROTATE_180:
             vflip = graph.add("vflip")
             last.link_to(vflip)
             last = vflip
@@ -548,24 +548,24 @@ class VideoMerger:
 
 if __name__ == "__main__":
     merger = VideoMerger(
-        speed=VideoProcessSpeed.FAST,
+        process_mode=VideoProcessMode.SPEED,
     )
     merger.merge(
         input_files=[
-            # InputVideoInfo(file_path=Path(r"C:\Users\PythonImporter\Videos\Captures\1.mp4"), rotation=Rotation.CLOCKWISE),
+            # InputVideoInfo(file_path=Path(r"C:\Users\PythonImporter\Videos\Captures\1.mp4"), rotation=Rotation.ROTATE_90),
             InputVideoInfo(
                 file_path=Path(
                     r"E:\load\python\Project\VideoFusion\测试\dy\b7bb97e21600b07f66c21e7932cb7550.mp4"
                 ),
-                rotation=Rotation.CLOCKWISE,
+                rotation=Rotation.ROTATE_90,
             ),
             InputVideoInfo(
                 file_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\a1.mp4"),
-                rotation=Rotation.CLOCKWISE,
+                rotation=Rotation.ROTATE_90,
             ),
             InputVideoInfo(
                 file_path=Path(r"G:\CodingSpace\Project\VideoMerger\测试视频\b1.mp4"),
-                rotation=Rotation.CLOCKWISE,
+                rotation=Rotation.ROTATE_90,
             ),
         ],
         output_file=Path("output.mp4"),
