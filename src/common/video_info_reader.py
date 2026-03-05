@@ -271,6 +271,8 @@ class VideoInfoReader:
         self,
         video_path: Path | str,
         thumb_resolution: tuple[int, int] = (640, 480),
+        crop_result: Optional[CropResult] = None,
+        rotate_angle: int = 0,
     ) -> PILImage.Image:
         """
         从视频中均匀抽帧，自动布局并拼接成缩略图总览图。
@@ -278,6 +280,8 @@ class VideoInfoReader:
         Args:
             video_path: 视频文件路径。
             thumb_resolution: 输出图分辨率，格式为 (宽, 高)。
+            crop_result: 可选裁剪参数（基于原始分辨率坐标）。
+            rotate_angle: 顺时针旋转角度，仅支持 0/90/180/270。
         """
         try:
             from PIL import Image, ImageDraw
@@ -285,6 +289,9 @@ class VideoInfoReader:
             raise ImportError(
                 "未安装 Pillow，无法生成缩略图。请先安装 pillow。"
             ) from exc
+
+        if rotate_angle not in (0, 90, 180, 270):
+            raise ValueError("rotate_angle 仅支持 0、90、180、270")
 
         video_path = Path(video_path)
         if not video_path.exists():
@@ -331,10 +338,20 @@ class VideoInfoReader:
                 pass
 
             duration = self._resolve_video_duration(container, stream)
-            v_width = int(stream.codec_context.width)
-            v_height = int(stream.codec_context.height)
-            src_aspect = v_width / max(v_height, 1)
-            is_landscape = v_width >= v_height
+            v_width = int(stream.codec_context.width or stream.width)
+            v_height = int(stream.codec_context.height or stream.height)
+
+            crop_box: tuple[int, int, int, int] | None = None
+            if crop_result is not None:
+                crop_box = self._normalize_crop_box(crop_result, v_width, v_height)
+
+            analyzed_w = crop_box[2] - crop_box[0] if crop_box is not None else v_width
+            analyzed_h = crop_box[3] - crop_box[1] if crop_box is not None else v_height
+            if rotate_angle in (90, 270):
+                analyzed_w, analyzed_h = analyzed_h, analyzed_w
+
+            src_aspect = analyzed_w / max(analyzed_h, 1)
+            is_landscape = analyzed_w >= analyzed_h
 
             best_grid: tuple[int, int] | None = None
             best_score: tuple[float, ...] | None = None
@@ -349,9 +366,11 @@ class VideoInfoReader:
 
                     cell_w = canvas_w / cols
                     cell_h = canvas_h / rows
-                    scale = min(cell_w / max(v_width, 1), cell_h / max(v_height, 1))
-                    thumb_w = v_width * scale
-                    thumb_h = v_height * scale
+                    scale = min(
+                        cell_w / max(analyzed_w, 1), cell_h / max(analyzed_h, 1)
+                    )
+                    thumb_w = analyzed_w * scale
+                    thumb_h = analyzed_h * scale
                     area = thumb_w * thumb_h
                     fill_ratio = area / max(cell_w * cell_h, 1e-9)
 
@@ -462,13 +481,36 @@ class VideoInfoReader:
                     pass
                 collect_candidates(time.perf_counter() + decode_budget_fallback)
 
-            thumbnails: list[tuple[PILImage.Image, float]] = []
+            canvas = Image.new("RGB", (canvas_w, canvas_h), (0, 0, 0))
+            thumbnail_timestamps = [0.0] * total_frames_needed
+
+            if rotate_angle != 0:
+                if hasattr(Image, "Transpose"):
+                    rotate_map = {
+                        90: Image.Transpose.ROTATE_270,
+                        180: Image.Transpose.ROTATE_180,
+                        270: Image.Transpose.ROTATE_90,
+                    }
+                else:
+                    rotate_map = {
+                        90: Image.ROTATE_270,
+                        180: Image.ROTATE_180,
+                        270: Image.ROTATE_90,
+                    }
+                rotate_op = rotate_map[rotate_angle]
+            else:
+                rotate_op = None
+
             if not candidates:
+                black_cache: dict[tuple[int, int], PILImage.Image] = {}
                 for slot in cell_slots:
-                    _, _, _, _, _, _, inner_w, inner_h = slot
-                    thumbnails.append(
-                        (Image.new("RGB", (inner_w, inner_h), (0, 0, 0)), 0.0)
-                    )
+                    _, _, _, _, ix0, iy0, inner_w, inner_h = slot
+                    size_key = (inner_w, inner_h)
+                    black = black_cache.get(size_key)
+                    if black is None:
+                        black = Image.new("RGB", size_key, (0, 0, 0))
+                        black_cache[size_key] = black
+                    canvas.paste(black, (ix0, iy0))
             else:
                 if total_frames_needed == 1:
                     selected_indices = [0]
@@ -479,24 +521,52 @@ class VideoInfoReader:
                         for i in range(total_frames_needed)
                     ]
 
+                transformed_cache: dict[int, PILImage.Image] = {}
+                crop_box_cache: dict[tuple[int, int], tuple[int, int, int, int]] = {}
                 render_cache: dict[tuple[int, int, int], PILImage.Image] = {}
                 for slot_idx, cand_idx in enumerate(selected_indices):
                     _, ts = candidates[cand_idx]
-                    _, _, _, _, _, _, inner_w, inner_h = cell_slots[slot_idx]
+                    thumbnail_timestamps[slot_idx] = ts
+                    _, _, _, _, ix0, iy0, inner_w, inner_h = cell_slots[slot_idx]
                     key = (cand_idx, inner_w, inner_h)
                     cached_img = render_cache.get(key)
                     if cached_img is None:
-                        src_frame = candidates[cand_idx][0]
-                        img = src_frame.to_image()
-                        if img.width != inner_w or img.height != inner_h:
-                            img = img.resize((inner_w, inner_h), fast_resample)
-                        render_cache[key] = img
-                        cached_img = img
-                    thumbnails.append((cached_img.copy(), ts))
+                        transformed = transformed_cache.get(cand_idx)
+                        if transformed is None:
+                            src_frame = candidates[cand_idx][0]
+                            transformed = src_frame.to_image()
+                            if crop_box is not None:
+                                frame_shape = (transformed.width, transformed.height)
+                                frame_crop_box = crop_box_cache.get(frame_shape)
+                                if frame_crop_box is None:
+                                    frame_crop_box = self._scale_crop_box(
+                                        crop_box,
+                                        (v_width, v_height),
+                                        frame_shape,
+                                    )
+                                    crop_box_cache[frame_shape] = frame_crop_box
+                                transformed = transformed.crop(frame_crop_box)
+                            if rotate_op is not None:
+                                transformed = transformed.transpose(rotate_op)
+                            transformed_cache[cand_idx] = transformed
 
+                        if (
+                            transformed.width != inner_w
+                            or transformed.height != inner_h
+                        ):
+                            cached_img = transformed.resize(
+                                (inner_w, inner_h), fast_resample
+                            )
+                        else:
+                            cached_img = transformed
+
+                        render_cache[key] = cached_img
+
+                    canvas.paste(cached_img, (ix0, iy0))
+
+            draw_canvas = ImageDraw.Draw(canvas)
             if time.perf_counter() - func_start < 0.22:
-                for idx, (img, ts) in enumerate(thumbnails):
-                    draw = ImageDraw.Draw(img)
+                for idx, ts in enumerate(thumbnail_timestamps):
                     use_ts = ts if ts > 0 else default_ts_step * idx
                     hours = int(use_ts // 3600)
                     minutes = int((use_ts % 3600) // 60)
@@ -506,18 +576,16 @@ class VideoInfoReader:
                         if hours > 0
                         else f"{minutes}:{seconds:02d}"
                     )
-                    tx, ty = font_size // 3, font_size // 4
-                    draw.text((tx + 1, ty + 1), text, fill=(16, 16, 16), font=font)
-                    draw.text((tx, ty), text, fill=(238, 238, 238), font=font)
-
-            canvas = Image.new("RGB", (canvas_w, canvas_h), (0, 0, 0))
-            for idx, (img, _) in enumerate(thumbnails):
-                _, _, _, _, ix0, iy0, _, _ = cell_slots[idx]
-                canvas.paste(img, (ix0, iy0))
+                    _, _, _, _, ix0, iy0, _, _ = cell_slots[idx]
+                    tx = ix0 + (font_size // 3)
+                    ty = iy0 + (font_size // 4)
+                    draw_canvas.text(
+                        (tx + 1, ty + 1), text, fill=(16, 16, 16), font=font
+                    )
+                    draw_canvas.text((tx, ty), text, fill=(238, 238, 238), font=font)
 
             outer_border_color = (58, 58, 58)
             inner_border_color = (132, 132, 132)
-            draw_canvas = ImageDraw.Draw(canvas)
             for x0, y0, x1, y1, *_ in cell_slots:
                 for i in range(outer_border_width):
                     draw_canvas.rectangle(
@@ -943,6 +1011,57 @@ class VideoInfoReader:
     # ======================== 通用辅助 ========================
 
     @staticmethod
+    def _normalize_crop_box(
+        crop_result: CropResult,
+        src_width: int,
+        src_height: int,
+    ) -> tuple[int, int, int, int]:
+        if src_width <= 0 or src_height <= 0:
+            raise ValueError("视频分辨率非法，无法应用裁剪")
+        if crop_result.width <= 0 or crop_result.height <= 0:
+            raise ValueError("crop_result 的 width/height 必须是正整数")
+
+        x0 = int(crop_result.x)
+        y0 = int(crop_result.y)
+        x1 = int(crop_result.x + crop_result.width)
+        y1 = int(crop_result.y + crop_result.height)
+
+        x0 = max(0, min(x0, src_width))
+        y0 = max(0, min(y0, src_height))
+        x1 = max(0, min(x1, src_width))
+        y1 = max(0, min(y1, src_height))
+
+        if x1 <= x0 or y1 <= y0:
+            raise ValueError("crop_result 超出视频范围，无法生成缩略图")
+        return x0, y0, x1, y1
+
+    @staticmethod
+    def _scale_crop_box(
+        crop_box: tuple[int, int, int, int],
+        src_size: tuple[int, int],
+        dst_size: tuple[int, int],
+    ) -> tuple[int, int, int, int]:
+        src_w, src_h = src_size
+        dst_w, dst_h = dst_size
+        if src_w <= 0 or src_h <= 0 or dst_w <= 0 or dst_h <= 0:
+            raise ValueError("裁剪缩放尺寸非法")
+
+        x0, y0, x1, y1 = crop_box
+        sx = dst_w / src_w
+        sy = dst_h / src_h
+
+        nx0 = int(math.floor(x0 * sx))
+        ny0 = int(math.floor(y0 * sy))
+        nx1 = int(math.ceil(x1 * sx))
+        ny1 = int(math.ceil(y1 * sy))
+
+        nx0 = max(0, min(nx0, dst_w - 1))
+        ny0 = max(0, min(ny0, dst_h - 1))
+        nx1 = max(nx0 + 1, min(nx1, dst_w))
+        ny1 = max(ny0 + 1, min(ny1, dst_h))
+        return nx0, ny0, nx1, ny1
+
+    @staticmethod
     def _resolve_total_frames(
         video_stream: av.video.stream.VideoStream,
         fps: float,
@@ -1070,7 +1189,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     # video_path = r"E:\load\python\Project\VideoFusion\测试\dy\4938d41224254f9f0ac996ea88814782.mp4"
-    video_path = r"E:\load\python\Project\VideoFusion\测试\dy\8fd68ff8825a0de6aff59c482abe7147.mp4"
+    video_path = r"G:\CodingSpace\Project\VideoMerger\测试视频\a1.mp4"
     detector = VideoInfoReader()
     info = detector.read_info(Path(video_path))
     print(info)
