@@ -293,14 +293,19 @@ Item {
             }
         }
 
-        ListView {
-            id: listView
+        ColumnLayout {
             anchors.fill: parent
             anchors.margins: 4
-            model: videoModel
-            clip: true
-            spacing: 2
-            boundsBehavior: Flickable.StopAtBounds
+            spacing: 8
+
+            ListView {
+                id: listView
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                model: videoModel
+                clip: true
+                spacing: 2
+                boundsBehavior: Flickable.StopAtBounds
 
             // ── 全局位移动画 ──
             displaced: Transition {
@@ -756,11 +761,27 @@ Item {
             }
         }
 
+            // ── 添加视频按钮 ──
+            Button {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                text: "添加视频"
+                icon.source: ImagePath.add
+                onClicked: fileDialog.open()
+                
+                HoverHandler {
+                    cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                }
+            }
+        }
+
         // ── 空列表占位提示 ──
         Item {
             id: emptyPlaceholder
-            anchors.fill: parent
+            anchors.fill: mainContainer
             anchors.margins: 16
+            // Leave space for the add button at the bottom
+            anchors.bottomMargin: 52 
             visible: videoModel.count === 0 && !root.externalDragHover
             z: 10
 
