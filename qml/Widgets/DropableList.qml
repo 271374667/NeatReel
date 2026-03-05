@@ -79,40 +79,47 @@ Item {
     ListModel {
         id: videoModel
         ListElement {
-            fileName: "示例视频_01.mp4"
             filePath: "C:/Users/PythonImporter/Videos/Captures/示例视频 _01.mp4"
-            iconSource: "qrc:/icons/video"
+            rotation: 90
         }
-        ListElement {
-            fileName: "旅拍合集_Summer_2025.mp4"
-            filePath: "D:/MediaLibrary/Projects/Travel/Summer2025/旅拍合集_Summer_2025.mp4"
-            iconSource: "qrc:/icons/video"
-        }
-        ListElement {
-            fileName: "会议录屏_03_15.mkv"
-            filePath: "E:/WorkRecordings/2026/March/会议录屏_03_15.mkv"
-            iconSource: "qrc:/icons/video"
-        }
-        ListElement {
-            fileName: "产品演示_Final_v2.mp4"
-            filePath: "C:/Users/PythonImporter/Desktop/产品发布/产品演示视频/产品演示_Final_v2.mp4"
-            iconSource: "qrc:/icons/video"
-        }
-        ListElement {
-            fileName: "无人机航拍_城市夜景.mov"
-            filePath: "F:/DroneFootage/CityNight/Export/无人机航拍_城市夜景.mov"
-            iconSource: "qrc:/icons/video"
-        }
-        ListElement {
-            fileName: "教程_QML入门.mp4"
-            filePath: "D:/Tutorials/QML/Beginner/教程_QML入门.mp4"
-            iconSource: "qrc:/icons/video"
-        }
-        ListElement {
-            fileName: "家庭聚会_20260101.mp4"
-            filePath: "C:/Users/PythonImporter/Videos/Family/NewYear/家庭聚会_20260101.mp4"
-            iconSource: "qrc:/icons/video"
-        }
+        // ListElement {
+        //     fileName: "旅拍合集_Summer_2025.mp4"
+        //     filePath: "D:/MediaLibrary/Projects/Travel/Summer2025/旅拍合集_Summer_2025.mp4"
+        //     iconSource: "qrc:/icons/video"
+        // }
+        // ListElement {
+        //     fileName: "会议录屏_03_15.mkv"
+        //     filePath: "E:/WorkRecordings/2026/March/会议录屏_03_15.mkv"
+        //     iconSource: "qrc:/icons/video"
+        // }
+        // ListElement {
+        //     fileName: "产品演示_Final_v2.mp4"
+        //     filePath: "C:/Users/PythonImporter/Desktop/产品发布/产品演示视频/产品演示_Final_v2.mp4"
+        //     iconSource: "qrc:/icons/video"
+        // }
+        // ListElement {
+        //     fileName: "无人机航拍_城市夜景.mov"
+        //     filePath: "F:/DroneFootage/CityNight/Export/无人机航拍_城市夜景.mov"
+        //     iconSource: "qrc:/icons/video"
+        // }
+        // ListElement {
+        //     fileName: "教程_QML入门.mp4"
+        //     filePath: "D:/Tutorials/QML/Beginner/教程_QML入门.mp4"
+        //     iconSource: "qrc:/icons/video"
+        // }
+        // ListElement {
+        //     fileName: "家庭聚会_20260101.mp4"
+        //     filePath: "C:/Users/PythonImporter/Videos/Family/NewYear/家庭聚会_20260101.mp4"
+        //     iconSource: "qrc:/icons/video"
+        // }
+    }
+
+    // ── 获取文件名工具函数 ──
+    function getFileName(filePath) {
+        if (!filePath) return "";
+        var path = filePath.toString().replace(/\\/g, "/");
+        var parts = path.split("/");
+        return parts[parts.length - 1];
     }
 
     // ── 路径省略工具函数 ──
@@ -135,6 +142,19 @@ Item {
         root.emitAllData();
     }
 
+    // ── 获取和更新旋转角度 ──
+    function setItemRotation(idx, angle) {
+        if (idx >= 0 && idx < videoModel.count) {
+            videoModel.setProperty(idx, "rotation", angle);
+        }
+    }
+    function getItemRotation(idx) {
+        if (idx >= 0 && idx < videoModel.count) {
+            return videoModel.get(idx).rotation;
+        }
+        return 90;
+    }
+
     // ── 智能排序 ──
     function smartSort(ascending) {
         var count = videoModel.count;
@@ -144,10 +164,10 @@ Item {
         var items = [];
         for (var i = 0; i < count; i++) {
             var it = videoModel.get(i);
-            items.push({ fileName: it.fileName, filePath: it.filePath, iconSource: it.iconSource });
+            items.push({ filePath: it.filePath, rotation: it.rotation, tempName: root.getFileName(it.filePath) });
         }
 
-        var names = items.map(function(x) { return x.fileName; });
+        var names = items.map(function(x) { return x.tempName; });
 
         // Windows 重命名模式: e.g. "文件 (1).mp4", "文件 (20).mp4"
         var winRenameRe = /\((\d+)\)/;
@@ -158,24 +178,24 @@ Item {
 
         if (names.every(function(n) { return /^\d+$/.test(n); })) {
             // 全部为纯数字
-            compareFn = function(a, b) { return parseInt(a.fileName) - parseInt(b.fileName); };
+            compareFn = function(a, b) { return parseInt(a.tempName) - parseInt(b.tempName); };
         } else if (names.every(function(n) { return winRenameRe.test(n); })) {
             // 全部符合 Windows 重命名规则
             compareFn = function(a, b) {
-                return parseInt(a.fileName.match(winRenameRe)[1]) - parseInt(b.fileName.match(winRenameRe)[1]);
+                return parseInt(a.tempName.match(winRenameRe)[1]) - parseInt(b.tempName.match(winRenameRe)[1]);
             };
         } else if (names.every(function(n) { return dateRe.test(n); })) {
             // 全部包含日期
             compareFn = function(a, b) {
-                var mA = a.fileName.match(dateRe);
-                var mB = b.fileName.match(dateRe);
+                var mA = a.tempName.match(dateRe);
+                var mB = b.tempName.match(dateRe);
                 var valA = parseInt(mA[1]) * 10000 + parseInt(mA[2]) * 100 + parseInt(mA[3]);
                 var valB = parseInt(mB[1]) * 10000 + parseInt(mB[2]) * 100 + parseInt(mB[3]);
                 return valA - valB;
             };
         } else {
             // 默认按字符串排序
-            compareFn = function(a, b) { return a.fileName.localeCompare(b.fileName); };
+            compareFn = function(a, b) { return a.tempName.localeCompare(b.tempName); };
         }
 
         items.sort(compareFn);
@@ -184,7 +204,7 @@ Item {
         // 重建 model
         videoModel.clear();
         for (var j = 0; j < items.length; j++) {
-            videoModel.append(items[j]);
+            videoModel.append({ filePath: items[j].filePath, rotation: items[j].rotation });
         }
         root.clearSelection();
     }
@@ -230,12 +250,9 @@ Item {
             var path = urlStr;
             if (path.startsWith("file:///")) path = path.substring(8);
             path = decodeURIComponent(path);
-            var parts = path.replace(/\\/g, "/").split("/");
-            var fName = parts[parts.length - 1];
             videoModel.append({
-                fileName: fName,
                 filePath: path,
-                iconSource: "qrc:/icons/video"
+                rotation: 90
             });
         }
     }
@@ -298,9 +315,8 @@ Item {
 
                 // 当前项的模型索引
                 required property int index
-                required property string fileName
                 required property string filePath
-                required property string iconSource
+                required property int rotation
 
                 property bool isSelected: root.isIndexSelected(index)
                 property bool isBeingDragged: dragState.draggedIndex === index && dragState.isDragging
@@ -474,7 +490,7 @@ Item {
                             // 视频名称
                             Text {
                                 Layout.fillWidth: true
-                                text: delegateRoot.fileName
+                                text: root.getFileName(delegateRoot.filePath)
                                 font.pixelSize: 13
                                 font.weight: Font.Medium
                                 font.family: "Microsoft YaHei UI"
@@ -536,7 +552,7 @@ Item {
                             } else {
                                 root.selectOnly(delegateRoot.index);
                                 if (mouse.button === Qt.LeftButton && mouse.modifiers === Qt.NoModifier) {
-                                    root.leftclicked({ "filePath": delegateRoot.filePath });
+                                    root.leftclicked({ "filePath": delegateRoot.filePath, "rotation": delegateRoot.rotation });
                                 }
                             }
                             mainContainer.forceActiveFocus();
@@ -553,7 +569,7 @@ Item {
                             dragState.draggedIndex = delegateRoot.index;
                             dragState.isDragging = true;
                             dragState.dropTargetIndex = delegateRoot.index;
-                            dragState.draggedFileName = delegateRoot.fileName;
+                            dragState.draggedFileName = root.getFileName(delegateRoot.filePath);
 
                             // 记录鼠标在根坐标系中的位置
                             var posInRoot = mapToItem(root, mouse.x, mouse.y);
@@ -662,6 +678,7 @@ Item {
         // ── 右键菜单（空白区域） ──
         Menu {
             id: emptySpaceMenu
+            MenuItem { text: "全选"; onTriggered: root.selectAll() }
             MenuItem { text: "智能升序"; onTriggered: root.smartSort(true) }
             MenuItem { text: "智能降序"; onTriggered: root.smartSort(false) }
         }
