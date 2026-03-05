@@ -41,10 +41,13 @@ if TYPE_CHECKING:
 
 _CACHE_MISS = object()
 _READ_INFO_CACHE_VERSION = 1
-_THUMB_CACHE_VERSION = 2
+_THUMB_CACHE_VERSION = 3
 _CACHE_MAX_SIZE_MB = max(1, int(os.getenv("VIDEO_INFO_CACHE_MAX_SIZE_MB", "500")))
 _CACHE_EXPIRE_SECONDS = max(
     60, int(os.getenv("VIDEO_INFO_CACHE_EXPIRE_SECONDS", str(24 * 60 * 60)))
+)
+_CACHE_DISK_MIN_FILE_SIZE_BYTES = max(
+    0, int(os.getenv("VIDEO_INFO_CACHE_DISK_MIN_FILE_SIZE", str(64 * 1024)))
 )
 _THUMB_CACHE_CODEC = os.getenv("VIDEO_INFO_THUMB_CACHE_CODEC", "jpeg").lower()
 _THUMB_CACHE_JPEG_QUALITY = min(
@@ -58,7 +61,9 @@ _THUMB_CACHE_WEBP_METHOD = min(
 )
 _MODULE_CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache" / "video_info_reader"
 _MODULE_CACHE = Cache(
-    str(_MODULE_CACHE_DIR), size_limit=_CACHE_MAX_SIZE_MB * 1024 * 1024
+    str(_MODULE_CACHE_DIR),
+    size_limit=_CACHE_MAX_SIZE_MB * 1024 * 1024,
+    disk_min_file_size=_CACHE_DISK_MIN_FILE_SIZE_BYTES,
 )
 
 
@@ -481,9 +486,9 @@ class VideoInfoReader:
 
         func_start = time.perf_counter()
         if hasattr(Image, "Resampling"):
-            fast_resample = Image.Resampling.BILINEAR
+            fast_resample = Image.Resampling.NEAREST
         else:
-            fast_resample = Image.BILINEAR
+            fast_resample = Image.NEAREST
 
         target_count = 12
         min_thumb_area = 9_000
@@ -515,7 +520,10 @@ class VideoInfoReader:
             except Exception:
                 pass
 
+            fps_hint = float(stream.average_rate or stream.base_rate or 30.0)
             duration = self._resolve_video_duration(container, stream)
+            if duration <= 0.0 and stream.frames:
+                duration = float(stream.frames) / max(fps_hint, 1e-6)
             v_width = int(stream.codec_context.width or stream.width)
             v_height = int(stream.codec_context.height or stream.height)
 
@@ -613,54 +621,18 @@ class VideoInfoReader:
             font_size = max(12, avg_inner_w // 18)
             font = _get_cached_font(font_size)
 
-            decode_budget_main = 0.12
-            decode_budget_fallback = 0.05
-            min_candidates = min(4, total_frames_needed)
-            max_candidates = max(total_frames_needed * 2, total_frames_needed + 4)
-            fps_hint = float(stream.average_rate or stream.base_rate or 30.0)
+            target_timestamps = self._compute_thumb_timestamps(
+                duration, total_frames_needed
+            )
             default_ts_step = (
                 duration / max(total_frames_needed - 1, 1) if duration > 0 else 0.0
             )
-
-            candidates: list[tuple[av.VideoFrame, float]] = []
-            decoded_count = 0
-
-            def collect_candidates(deadline: float) -> None:
-                nonlocal decoded_count
-                for packet in container.demux(stream):
-                    if time.perf_counter() >= deadline:
-                        return
-                    for frame in packet.decode():
-                        if time.perf_counter() >= deadline:
-                            return
-                        ts = (
-                            float(frame.pts * stream.time_base)
-                            if frame.pts is not None and stream.time_base is not None
-                            else decoded_count / max(fps_hint, 1e-6)
-                        )
-                        decoded_count += 1
-                        candidates.append((frame, ts))
-                        if len(candidates) >= max_candidates:
-                            return
-
-            collect_candidates(time.perf_counter() + decode_budget_main)
-
-            if len(candidates) < min_candidates:
-                try:
-                    container.seek(0, stream=stream, backward=True, any_frame=True)
-                except Exception:
-                    try:
-                        container.seek(0)
-                    except Exception:
-                        pass
-                try:
-                    stream.codec_context.skip_frame = "DEFAULT"
-                except Exception:
-                    pass
-                collect_candidates(time.perf_counter() + decode_budget_fallback)
+            sampled_candidates = self._sample_thumb_frames_with_seek(
+                container, stream, target_timestamps
+            )
 
             canvas = Image.new("RGB", (canvas_w, canvas_h), (0, 0, 0))
-            thumbnail_timestamps = [0.0] * total_frames_needed
+            thumbnail_timestamps = target_timestamps.copy()
 
             if rotate_angle != 0:
                 if hasattr(Image, "Transpose"):
@@ -679,7 +651,12 @@ class VideoInfoReader:
             else:
                 rotate_op = None
 
-            if not candidates:
+            available_indices = [
+                idx
+                for idx, (frame, _) in enumerate(sampled_candidates)
+                if frame is not None
+            ]
+            if not available_indices:
                 black_cache: dict[tuple[int, int], PILImage.Image] = {}
                 for slot in cell_slots:
                     _, _, _, _, ix0, iy0, inner_w, inner_h = slot
@@ -690,28 +667,32 @@ class VideoInfoReader:
                         black_cache[size_key] = black
                     canvas.paste(black, (ix0, iy0))
             else:
-                if total_frames_needed == 1:
-                    selected_indices = [0]
-                else:
-                    c_last = len(candidates) - 1
-                    selected_indices = [
-                        int(round(i * c_last / (total_frames_needed - 1)))
-                        for i in range(total_frames_needed)
-                    ]
-
                 transformed_cache: dict[int, PILImage.Image] = {}
                 crop_box_cache: dict[tuple[int, int], tuple[int, int, int, int]] = {}
                 render_cache: dict[tuple[int, int, int], PILImage.Image] = {}
-                for slot_idx, cand_idx in enumerate(selected_indices):
-                    _, ts = candidates[cand_idx]
+                for slot_idx, slot in enumerate(cell_slots):
+                    _, _, _, _, ix0, iy0, inner_w, inner_h = slot
+                    source_idx = slot_idx
+                    frame, ts = sampled_candidates[source_idx]
+                    if frame is None:
+                        source_idx = min(
+                            available_indices,
+                            key=lambda i: abs(
+                                sampled_candidates[i][1] - target_timestamps[slot_idx]
+                            ),
+                        )
+                        frame, ts = sampled_candidates[source_idx]
+
+                    if frame is None:
+                        continue
+
                     thumbnail_timestamps[slot_idx] = ts
-                    _, _, _, _, ix0, iy0, inner_w, inner_h = cell_slots[slot_idx]
-                    key = (cand_idx, inner_w, inner_h)
+                    key = (source_idx, inner_w, inner_h)
                     cached_img = render_cache.get(key)
                     if cached_img is None:
-                        transformed = transformed_cache.get(cand_idx)
+                        transformed = transformed_cache.get(source_idx)
                         if transformed is None:
-                            src_frame = candidates[cand_idx][0]
+                            src_frame = frame
                             transformed = src_frame.to_image()
                             if crop_box is not None:
                                 frame_shape = (transformed.width, transformed.height)
@@ -726,7 +707,7 @@ class VideoInfoReader:
                                 transformed = transformed.crop(frame_crop_box)
                             if rotate_op is not None:
                                 transformed = transformed.transpose(rotate_op)
-                            transformed_cache[cand_idx] = transformed
+                            transformed_cache[source_idx] = transformed
 
                         if (
                             transformed.width != inner_w
@@ -829,6 +810,140 @@ class VideoInfoReader:
                 return None
 
         return None
+
+    @staticmethod
+    def _compute_thumb_timestamps(duration: float, total_count: int) -> list[float]:
+        if total_count <= 0:
+            return []
+
+        safe_duration = max(0.0, duration)
+        if safe_duration <= 0.0:
+            return [0.0 for _ in range(total_count)]
+
+        if safe_duration < 4.0:
+            start = 0.0
+            end = safe_duration
+        else:
+            margin = min(3.0, safe_duration * 0.05)
+            start = margin
+            end = max(start, safe_duration - margin)
+
+        if total_count == 1:
+            return [0.5 * (start + end)]
+
+        if end <= start:
+            return [start for _ in range(total_count)]
+
+        step = (end - start) / (total_count - 1)
+        return [start + i * step for i in range(total_count)]
+
+    def _sample_thumb_frames_with_seek(
+        self,
+        container: av.container.InputContainer,
+        stream: av.video.stream.VideoStream,
+        timestamps: list[float],
+    ) -> list[tuple[Optional[av.VideoFrame], float]]:
+        if not timestamps:
+            return []
+
+        fps_hint = float(stream.average_rate or stream.base_rate or 30.0)
+        key_only_decode_limit = max(2, min(8, int(round(fps_hint * 0.25))))
+        full_decode_limit = max(10, min(42, int(round(fps_hint * 1.2))))
+
+        if len(timestamps) == 1:
+            time_span = max(0.0, timestamps[0])
+        else:
+            time_span = max(0.0, timestamps[-1] - timestamps[0])
+        seek_tolerance = max(0.4, min(2.5, time_span / max(len(timestamps) * 2, 1)))
+
+        results: list[tuple[Optional[av.VideoFrame], float]] = [
+            (None, ts) for ts in timestamps
+        ]
+
+        for idx, ts in enumerate(timestamps):
+            frame, frame_ts = self._seek_frame_near_timestamp(
+                container=container,
+                stream=stream,
+                timestamp=ts,
+                max_decode_frames=key_only_decode_limit,
+            )
+            if frame is not None and abs(frame_ts - ts) <= seek_tolerance:
+                results[idx] = (frame, frame_ts)
+
+        missing_indices = [idx for idx, (frame, _) in enumerate(results) if frame is None]
+        if not missing_indices:
+            return results
+
+        try:
+            stream.codec_context.skip_frame = "DEFAULT"
+        except Exception:
+            pass
+
+        for idx in missing_indices:
+            ts = timestamps[idx]
+            frame, frame_ts = self._seek_frame_near_timestamp(
+                container=container,
+                stream=stream,
+                timestamp=ts,
+                max_decode_frames=full_decode_limit,
+            )
+            if frame is not None:
+                results[idx] = (frame, frame_ts)
+
+        return results
+
+    def _seek_frame_near_timestamp(
+        self,
+        container: av.container.InputContainer,
+        stream: av.video.stream.VideoStream,
+        timestamp: float,
+        max_decode_frames: int,
+    ) -> tuple[Optional[av.VideoFrame], float]:
+        time_base = stream.time_base
+        if time_base is None:
+            return None, timestamp
+
+        seek_target = max(0, int(timestamp / float(time_base)))
+        try:
+            container.seek(seek_target, stream=stream, backward=True, any_frame=False)
+        except av.error.FFmpegError as e:
+            logger.debug(f"seek 失败 ts={timestamp:.2f}s: {e}")
+            return None, timestamp
+
+        best_frame: Optional[av.VideoFrame] = None
+        best_ts = timestamp
+        best_distance = float("inf")
+        decoded = 0
+
+        for packet in container.demux(stream):
+            for frame in packet.decode():
+                decoded += 1
+                frame_ts = self._frame_timestamp_second(
+                    frame=frame, stream=stream, fallback=timestamp
+                )
+                distance = abs(frame_ts - timestamp)
+                if distance < best_distance:
+                    best_frame = frame
+                    best_ts = frame_ts
+                    best_distance = distance
+
+                if frame_ts >= timestamp or decoded >= max_decode_frames:
+                    return best_frame, best_ts
+
+            if decoded >= max_decode_frames:
+                break
+
+        return best_frame, best_ts
+
+    @staticmethod
+    def _frame_timestamp_second(
+        frame: av.VideoFrame,
+        stream: av.video.stream.VideoStream,
+        fallback: float,
+    ) -> float:
+        if frame.pts is not None and stream.time_base is not None:
+            return float(frame.pts * stream.time_base)
+        return fallback
 
     def _sample_sequentially(
         self,
