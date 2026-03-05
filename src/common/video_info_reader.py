@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 _CACHE_MISS = object()
 _READ_INFO_CACHE_VERSION = 1
-_THUMB_CACHE_VERSION = 5
+_THUMB_CACHE_VERSION = 6
 _CACHE_MAX_SIZE_MB = max(1, int(os.getenv("VIDEO_INFO_CACHE_MAX_SIZE_MB", "500")))
 _CACHE_EXPIRE_SECONDS = max(
     60, int(os.getenv("VIDEO_INFO_CACHE_EXPIRE_SECONDS", str(24 * 60 * 60)))
@@ -49,15 +49,8 @@ _CACHE_EXPIRE_SECONDS = max(
 _CACHE_DISK_MIN_FILE_SIZE_BYTES = max(
     0, int(os.getenv("VIDEO_INFO_CACHE_DISK_MIN_FILE_SIZE", str(64 * 1024)))
 )
-_THUMB_CACHE_CODEC = os.getenv("VIDEO_INFO_THUMB_CACHE_CODEC", "jpeg").lower()
 _THUMB_CACHE_JPEG_QUALITY = min(
     95, max(60, int(os.getenv("VIDEO_INFO_THUMB_CACHE_JPEG_QUALITY", "88")))
-)
-_THUMB_CACHE_WEBP_QUALITY = min(
-    95, max(60, int(os.getenv("VIDEO_INFO_THUMB_CACHE_WEBP_QUALITY", "82")))
-)
-_THUMB_CACHE_WEBP_METHOD = min(
-    6, max(0, int(os.getenv("VIDEO_INFO_THUMB_CACHE_WEBP_METHOD", "1")))
 )
 _MODULE_CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache" / "video_info_reader"
 _MODULE_CACHE = Cache(
@@ -65,12 +58,6 @@ _MODULE_CACHE = Cache(
     size_limit=_CACHE_MAX_SIZE_MB * 1024 * 1024,
     disk_min_file_size=_CACHE_DISK_MIN_FILE_SIZE_BYTES,
 )
-
-
-def _effective_thumb_codec() -> str:
-    if _THUMB_CACHE_CODEC in {"jpeg", "webp", "raw"}:
-        return _THUMB_CACHE_CODEC
-    return "jpeg"
 
 
 def _crop_to_cache_tuple(crop_result: Optional["CropResult"]) -> tuple | None:
@@ -141,10 +128,7 @@ def _generate_thumb_key_builder(
         int(thumb_resolution[1]),
         _crop_to_cache_tuple(crop_result),
         int(rotate_angle),
-        _effective_thumb_codec(),
         _THUMB_CACHE_JPEG_QUALITY,
-        _THUMB_CACHE_WEBP_QUALITY,
-        _THUMB_CACHE_WEBP_METHOD,
     )
 
 
@@ -178,22 +162,9 @@ def _diskcache_method(
     return decorator
 
 
-def _serialize_thumb_cache_value(image: "PILImage.Image") -> tuple[str, Any]:
-    codec = _effective_thumb_codec()
-    if codec == "raw":
-        return ("raw", image.copy())
-
+def _serialize_thumb_cache_value(image: "PILImage.Image") -> bytes:
     rgb = image if image.mode == "RGB" else image.convert("RGB")
     buff = BytesIO()
-    if codec == "webp":
-        rgb.save(
-            buff,
-            format="WEBP",
-            quality=_THUMB_CACHE_WEBP_QUALITY,
-            method=_THUMB_CACHE_WEBP_METHOD,
-        )
-        return ("webp", buff.getvalue())
-
     rgb.save(
         buff,
         format="JPEG",
@@ -201,20 +172,16 @@ def _serialize_thumb_cache_value(image: "PILImage.Image") -> tuple[str, Any]:
         optimize=False,
         progressive=False,
     )
-    return ("jpeg", buff.getvalue())
+    return buff.getvalue()
 
 
-def _deserialize_thumb_cache_value(payload: tuple[str, Any]) -> "PILImage.Image":
-    tag, data = payload
-    if tag == "raw":
-        return data.copy()
-
+def _deserialize_thumb_cache_value(payload: bytes) -> "PILImage.Image":
     try:
         from PIL import Image
     except ImportError as exc:
         raise ImportError("未安装 Pillow，无法读取缩略图缓存。请先安装 pillow。") from exc
 
-    img = Image.open(BytesIO(data))
+    img = Image.open(BytesIO(payload))
     img.load()
     return img.convert("RGB") if img.mode != "RGB" else img
 
