@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 _CACHE_MISS = object()
 _READ_INFO_CACHE_VERSION = 1
-_THUMB_CACHE_VERSION = 3
+_THUMB_CACHE_VERSION = 5
 _CACHE_MAX_SIZE_MB = max(1, int(os.getenv("VIDEO_INFO_CACHE_MAX_SIZE_MB", "500")))
 _CACHE_EXPIRE_SECONDS = max(
     60, int(os.getenv("VIDEO_INFO_CACHE_EXPIRE_SECONDS", str(24 * 60 * 60)))
@@ -627,6 +627,7 @@ class VideoInfoReader:
             default_ts_step = (
                 duration / max(total_frames_needed - 1, 1) if duration > 0 else 0.0
             )
+            # 极致速度模式：直接按时间点 seek，抓取该位置首个可解码关键帧
             sampled_candidates = self._sample_thumb_frames_with_seek(
                 container, stream, target_timestamps
             )
@@ -846,58 +847,25 @@ class VideoInfoReader:
         if not timestamps:
             return []
 
-        fps_hint = float(stream.average_rate or stream.base_rate or 30.0)
-        key_only_decode_limit = max(2, min(8, int(round(fps_hint * 0.25))))
-        full_decode_limit = max(10, min(42, int(round(fps_hint * 1.2))))
-
-        if len(timestamps) == 1:
-            time_span = max(0.0, timestamps[0])
-        else:
-            time_span = max(0.0, timestamps[-1] - timestamps[0])
-        seek_tolerance = max(0.4, min(2.5, time_span / max(len(timestamps) * 2, 1)))
-
-        results: list[tuple[Optional[av.VideoFrame], float]] = [
-            (None, ts) for ts in timestamps
+        max_probe_packets = max(
+            8, min(256, int(os.getenv("VIDEO_INFO_THUMB_SEEK_MAX_PACKETS", "64")))
+        )
+        return [
+            self._seek_first_thumb_frame(
+                container=container,
+                stream=stream,
+                timestamp=ts,
+                max_probe_packets=max_probe_packets,
+            )
+            for ts in timestamps
         ]
 
-        for idx, ts in enumerate(timestamps):
-            frame, frame_ts = self._seek_frame_near_timestamp(
-                container=container,
-                stream=stream,
-                timestamp=ts,
-                max_decode_frames=key_only_decode_limit,
-            )
-            if frame is not None and abs(frame_ts - ts) <= seek_tolerance:
-                results[idx] = (frame, frame_ts)
-
-        missing_indices = [idx for idx, (frame, _) in enumerate(results) if frame is None]
-        if not missing_indices:
-            return results
-
-        try:
-            stream.codec_context.skip_frame = "DEFAULT"
-        except Exception:
-            pass
-
-        for idx in missing_indices:
-            ts = timestamps[idx]
-            frame, frame_ts = self._seek_frame_near_timestamp(
-                container=container,
-                stream=stream,
-                timestamp=ts,
-                max_decode_frames=full_decode_limit,
-            )
-            if frame is not None:
-                results[idx] = (frame, frame_ts)
-
-        return results
-
-    def _seek_frame_near_timestamp(
+    def _seek_first_thumb_frame(
         self,
         container: av.container.InputContainer,
         stream: av.video.stream.VideoStream,
         timestamp: float,
-        max_decode_frames: int,
+        max_probe_packets: int,
     ) -> tuple[Optional[av.VideoFrame], float]:
         time_base = stream.time_base
         if time_base is None:
@@ -910,30 +878,17 @@ class VideoInfoReader:
             logger.debug(f"seek 失败 ts={timestamp:.2f}s: {e}")
             return None, timestamp
 
-        best_frame: Optional[av.VideoFrame] = None
-        best_ts = timestamp
-        best_distance = float("inf")
-        decoded = 0
-
+        probed_packets = 0
         for packet in container.demux(stream):
+            probed_packets += 1
             for frame in packet.decode():
-                decoded += 1
-                frame_ts = self._frame_timestamp_second(
+                return frame, self._frame_timestamp_second(
                     frame=frame, stream=stream, fallback=timestamp
                 )
-                distance = abs(frame_ts - timestamp)
-                if distance < best_distance:
-                    best_frame = frame
-                    best_ts = frame_ts
-                    best_distance = distance
-
-                if frame_ts >= timestamp or decoded >= max_decode_frames:
-                    return best_frame, best_ts
-
-            if decoded >= max_decode_frames:
+            if probed_packets >= max_probe_packets:
                 break
 
-        return best_frame, best_ts
+        return None, timestamp
 
     @staticmethod
     def _frame_timestamp_second(
