@@ -27,7 +27,7 @@ Item {
     property string fileName: ""                     // 文件名
     property string filePath: ""                     // 文件路径
     property string durationAndResolution: ""        // 总时长 / 原始分辨率
-    property string rotationAngle: "0°"              // 相对于原视频顺时针旋转角度
+    property int rotationAngle: 90                 // 相对于原视频顺时针旋转角度
 
     // ── 样式属性 ──
     property real  cornerRadius: 8
@@ -210,7 +210,7 @@ Item {
                     font.weight: Font.Normal
                     color: root.valueColor
                     elide: Text.ElideMiddle
-                    width: parent.parent ? parent.parent.width : implicitWidth
+                    width: parent.width
                     maximumLineCount: 1
                     renderType: Text.NativeRendering
                 }
@@ -258,7 +258,7 @@ Item {
                 }
 
                 Text {
-                    text: root.rotationAngle || "0°"
+                    text: root.rotationAngle + "°"
                     font.pixelSize: 14
                     font.family: "Microsoft YaHei UI"
                     font.weight: Font.DemiBold
