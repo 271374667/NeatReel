@@ -402,8 +402,11 @@ class VideoMerger:
 
                 video_pts_offset += segment_video_frame_count
                 # 将 audio offset 同步到 video offset 的时间线，消除累积漂移
-                audio_pts_offset = int(
-                    video_pts_offset / effective_fps * target_audio_rate
+                # 使用 max 防止回退：重采样可能产生比视频时长更多的音频样本，
+                # 导致编码器内部缓冲的 PTS 高于按视频计算的值
+                audio_pts_offset = max(
+                    int(video_pts_offset / effective_fps * target_audio_rate),
+                    audio_pts_offset + segment_audio_sample_count,
                 )
 
                 input_container.close()
