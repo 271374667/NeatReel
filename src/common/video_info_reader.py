@@ -14,26 +14,133 @@
 from __future__ import annotations
 
 from collections import Counter
-from functools import lru_cache
+from functools import lru_cache, wraps
 import math
 from pathlib import Path
 import time
 
 import av
+from diskcache import Cache
 import numpy as np
 from scipy.ndimage import (
     binary_opening,
     binary_closing,
+    find_objects,
     label,
     gaussian_filter,
 )
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
+from typing import Any, Callable, Optional, TYPE_CHECKING
 
 from loguru import logger
 
 if TYPE_CHECKING:
     from PIL import Image as PILImage
+
+_CACHE_MISS = object()
+_READ_INFO_CACHE_VERSION = 1
+_THUMB_CACHE_VERSION = 1
+_MODULE_CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache" / "video_info_reader"
+_MODULE_CACHE = Cache(str(_MODULE_CACHE_DIR))
+
+
+def _crop_to_cache_tuple(crop_result: Optional["CropResult"]) -> tuple | None:
+    if crop_result is None:
+        return None
+    return (
+        int(crop_result.x),
+        int(crop_result.y),
+        int(crop_result.width),
+        int(crop_result.height),
+        float(crop_result.confidence),
+        bool(crop_result.has_border),
+    )
+
+
+def _file_signature_for_cache(video_path: Path | str) -> tuple[str, int, int] | None:
+    path = Path(video_path)
+    if not path.exists():
+        return None
+    st = path.stat()
+    return str(path.resolve()), int(st.st_size), int(st.st_mtime_ns)
+
+
+def _read_info_key_builder(
+    reader: "VideoInfoReader",
+    video_path: Path,
+    crop_result: Optional["CropResult"] = None,
+) -> tuple | None:
+    file_sig = _file_signature_for_cache(video_path)
+    if file_sig is None:
+        return None
+    reader_sig = (
+        reader.detect_short_edge,
+        reader.min_border_ratio,
+        reader.safety_margin,
+        reader.diff_threshold,
+        reader.morph_kernel_size,
+        reader.min_region_ratio,
+        reader.scene_change_threshold,
+        reader.min_change_coverage,
+        reader.adaptive_threshold,
+        reader.seek_skip_frames,
+        reader.spatial_edge_threshold,
+        reader.spatial_border_max_brightness,
+    )
+    return (
+        "read_info",
+        _READ_INFO_CACHE_VERSION,
+        file_sig,
+        reader_sig,
+        _crop_to_cache_tuple(crop_result),
+    )
+
+
+def _generate_thumb_key_builder(
+    _: "VideoInfoReader",
+    video_path: Path | str,
+    thumb_resolution: tuple[int, int] = (640, 480),
+    crop_result: Optional["CropResult"] = None,
+    rotate_angle: int = 0,
+) -> tuple | None:
+    file_sig = _file_signature_for_cache(video_path)
+    if file_sig is None:
+        return None
+    return (
+        "generate_thumb_image",
+        _THUMB_CACHE_VERSION,
+        file_sig,
+        int(thumb_resolution[0]),
+        int(thumb_resolution[1]),
+        _crop_to_cache_tuple(crop_result),
+        int(rotate_angle),
+    )
+
+
+def _diskcache_method(
+    key_builder: Callable[..., tuple | None],
+    on_hit: Callable[[Any], None] | None = None,
+):
+    def decorator(func: Callable):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            key = key_builder(self, *args, **kwargs)
+            if key is None:
+                return func(self, *args, **kwargs)
+
+            cached = _MODULE_CACHE.get(key, default=_CACHE_MISS)
+            if cached is not _CACHE_MISS:
+                if on_hit is not None:
+                    on_hit(self)
+                return cached
+
+            result = func(self, *args, **kwargs)
+            _MODULE_CACHE.set(key, result)
+            return result
+
+        return wrapper
+
+    return decorator
 
 
 @lru_cache(maxsize=32)
@@ -161,6 +268,7 @@ class VideoInfoReader:
 
     # ======================== 公开接口 ========================
 
+    @_diskcache_method(_read_info_key_builder, on_hit=lambda reader: reader._reset())
     def read_info(
         self, video_path: Path, crop_result: Optional[CropResult] = None
     ) -> VideoInfo:
@@ -267,6 +375,7 @@ class VideoInfoReader:
                     idx += 1
         raise ValueError(f"帧索引 {frame_index} 超出视频范围: {video_path}")
 
+    @_diskcache_method(_generate_thumb_key_builder)
     def generate_thumb_image(
         self,
         video_path: Path | str,
@@ -713,17 +822,14 @@ class VideoInfoReader:
                 if n_feat > 0:
                     min_area = int(dw * dh * self.min_region_ratio)
                     areas = np.bincount(labeled_frame.ravel())
-                    for lbl_idx in range(1, len(areas)):
+                    objects = find_objects(labeled_frame)
+                    for lbl_idx, slc in enumerate(objects, start=1):
+                        if slc is None:
+                            continue
                         if areas[lbl_idx] < min_area:
                             continue
-                        rows = np.any(labeled_frame == lbl_idx, axis=1)
-                        cols = np.any(labeled_frame == lbl_idx, axis=0)
-                        if not rows.any() or not cols.any():
-                            continue
-                        r_idx = np.where(rows)[0]
-                        c_idx = np.where(cols)[0]
-                        t, b = int(r_idx[0]), int(r_idx[-1]) + 1
-                        le, ri = int(c_idx[0]), int(c_idx[-1]) + 1
+                        t, b = int(slc[0].start), int(slc[0].stop)
+                        le, ri = int(slc[1].start), int(slc[1].stop)
                         # 将 bounding rect 区域填为 255
                         self._accumulated[t:b, le:ri] = 255
 
@@ -801,19 +907,13 @@ class VideoInfoReader:
             return None
 
         # 找最大连通域（按 bounding rect 面积）
-        areas = np.bincount(labeled.ravel())
-        # areas[0] 是背景，跳过
         max_area = 0
         best_rect = None
-        for lbl_idx in range(1, len(areas)):
-            rows = np.any(labeled == lbl_idx, axis=1)
-            cols = np.any(labeled == lbl_idx, axis=0)
-            if not rows.any() or not cols.any():
+        for slc in find_objects(labeled):
+            if slc is None:
                 continue
-            r_idx = np.where(rows)[0]
-            c_idx = np.where(cols)[0]
-            t, b = int(r_idx[0]), int(r_idx[-1]) + 1
-            le, ri = int(c_idx[0]), int(c_idx[-1]) + 1
+            t, b = int(slc[0].start), int(slc[0].stop)
+            le, ri = int(slc[1].start), int(slc[1].stop)
             rect_area = (b - t) * (ri - le)
             if rect_area > max_area:
                 max_area = rect_area
@@ -1189,7 +1289,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
     # video_path = r"E:\load\python\Project\VideoFusion\测试\dy\4938d41224254f9f0ac996ea88814782.mp4"
-    video_path = r"G:\CodingSpace\Project\VideoMerger\测试视频\a1.mp4"
+    video_path = r"G:\CodingSpace\Project\VideoMerger\测试视频\b1.mp4"
     detector = VideoInfoReader()
     info = detector.read_info(Path(video_path))
     print(info)
