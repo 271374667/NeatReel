@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 _CACHE_MISS = object()
 _READ_INFO_CACHE_VERSION = 1
-_THUMB_CACHE_VERSION = 6
+_THUMB_CACHE_VERSION = 8
 _CACHE_MAX_SIZE_MB = max(1, int(os.getenv("VIDEO_INFO_CACHE_MAX_SIZE_MB", "500")))
 _CACHE_EXPIRE_SECONDS = max(
     60, int(os.getenv("VIDEO_INFO_CACHE_EXPIRE_SECONDS", str(24 * 60 * 60)))
@@ -113,9 +113,10 @@ def _read_info_key_builder(
 def _generate_thumb_key_builder(
     _: "VideoInfoReader",
     video_path: Path | str,
-    thumb_resolution: tuple[int, int] = (640, 480),
+    thumb_resolution: tuple[int, int] = (854, 480),
     crop_result: Optional["CropResult"] = None,
     rotate_angle: int = 0,
+    orientation: int = 0,
 ) -> tuple | None:
     file_sig = _file_signature_for_cache(video_path)
     if file_sig is None:
@@ -128,6 +129,7 @@ def _generate_thumb_key_builder(
         int(thumb_resolution[1]),
         _crop_to_cache_tuple(crop_result),
         int(rotate_angle),
+        int(orientation),
         _THUMB_CACHE_JPEG_QUALITY,
     )
 
@@ -179,7 +181,9 @@ def _deserialize_thumb_cache_value(payload: bytes) -> "PILImage.Image":
     try:
         from PIL import Image
     except ImportError as exc:
-        raise ImportError("未安装 Pillow，无法读取缩略图缓存。请先安装 pillow。") from exc
+        raise ImportError(
+            "未安装 Pillow，无法读取缩略图缓存。请先安装 pillow。"
+        ) from exc
 
     img = Image.open(BytesIO(payload))
     img.load()
@@ -420,9 +424,10 @@ class VideoInfoReader:
     def generate_thumb_image(
         self,
         video_path: Path | str,
-        thumb_resolution: tuple[int, int] = (640, 480),
+        thumb_resolution: tuple[int, int] = (854, 480),
         crop_result: Optional[CropResult] = None,
         rotate_angle: int = 0,
+        orientation: int = 0,
     ) -> PILImage.Image:
         """
         从视频中均匀抽帧，自动布局并拼接成缩略图总览图。
@@ -432,6 +437,7 @@ class VideoInfoReader:
             thumb_resolution: 输出图分辨率，格式为 (宽, 高)。
             crop_result: 可选裁剪参数（基于原始分辨率坐标）。
             rotate_angle: 顺时针旋转角度，仅支持 0/90/180/270。
+            orientation: 子缩略图朝向，0=横屏（16:9），1=竖屏（9:16）。
         """
         try:
             from PIL import Image, ImageDraw
@@ -442,6 +448,8 @@ class VideoInfoReader:
 
         if rotate_angle not in (0, 90, 180, 270):
             raise ValueError("rotate_angle 仅支持 0、90、180、270")
+        if orientation not in (0, 1):
+            raise ValueError("orientation 仅支持 0(横屏) 或 1(竖屏)")
 
         video_path = Path(video_path)
         if not video_path.exists():
@@ -458,7 +466,6 @@ class VideoInfoReader:
             fast_resample = Image.NEAREST
 
         target_count = 12
-        min_thumb_area = 9_000
 
         with av.open(str(video_path)) as container:
             if not container.streams.video:
@@ -498,62 +505,11 @@ class VideoInfoReader:
             if crop_result is not None:
                 crop_box = self._normalize_crop_box(crop_result, v_width, v_height)
 
-            analyzed_w = crop_box[2] - crop_box[0] if crop_box is not None else v_width
-            analyzed_h = crop_box[3] - crop_box[1] if crop_box is not None else v_height
-            if rotate_angle in (90, 270):
-                analyzed_w, analyzed_h = analyzed_h, analyzed_w
-
-            src_aspect = analyzed_w / max(analyzed_h, 1)
-            is_landscape = analyzed_w >= analyzed_h
-
-            best_grid: tuple[int, int] | None = None
-            best_score: tuple[float, ...] | None = None
-            fallback_grid = (3, 4)
-            fallback_score: tuple[float, ...] | None = None
-
-            for n in range(target_count, 0, -1):
-                for cols in range(1, n + 1):
-                    if n % cols != 0:
-                        continue
-                    rows = n // cols
-
-                    cell_w = canvas_w / cols
-                    cell_h = canvas_h / rows
-                    scale = min(
-                        cell_w / max(analyzed_w, 1), cell_h / max(analyzed_h, 1)
-                    )
-                    thumb_w = analyzed_w * scale
-                    thumb_h = analyzed_h * scale
-                    area = thumb_w * thumb_h
-                    fill_ratio = area / max(cell_w * cell_h, 1e-9)
-
-                    cell_aspect = cell_w / max(cell_h, 1e-9)
-                    aspect_error = abs(
-                        math.log(max(cell_aspect, 1e-9) / max(src_aspect, 1e-9))
-                    )
-                    orientation_match = (
-                        1.0
-                        if (is_landscape and rows >= cols)
-                        or ((not is_landscape) and cols >= rows)
-                        else 0.0
-                    )
-
-                    score = (float(n), orientation_match, fill_ratio, -aspect_error)
-                    if fallback_score is None or score > fallback_score:
-                        fallback_score = score
-                        fallback_grid = (cols, rows)
-
-                    if area < min_thumb_area:
-                        continue
-                    if best_score is None or score > best_score:
-                        best_score = score
-                        best_grid = (cols, rows)
-
-                if best_grid is not None:
-                    break
-
-            cols, rows = best_grid if best_grid is not None else fallback_grid
-            total_frames_needed = cols * rows
+            if orientation == 0:
+                cols, rows = (4, 3)
+            else:
+                cols, rows = (6, 2)
+            total_frames_needed = target_count
 
             outer_border_width = 1
             inner_border_width = 1 if min(canvas_w, canvas_h) >= 360 else 0
@@ -681,8 +637,11 @@ class VideoInfoReader:
                             transformed.width != inner_w
                             or transformed.height != inner_h
                         ):
-                            cached_img = transformed.resize(
-                                (inner_w, inner_h), fast_resample
+                            cached_img = self._fit_image_with_black_bars(
+                                transformed,
+                                inner_w,
+                                inner_h,
+                                fast_resample,
                             )
                         else:
                             cached_img = transformed
@@ -866,6 +825,45 @@ class VideoInfoReader:
         if frame.pts is not None and stream.time_base is not None:
             return float(frame.pts * stream.time_base)
         return fallback
+
+    @staticmethod
+    def _fit_image_with_black_bars(
+        image: "PILImage.Image",
+        target_w: int,
+        target_h: int,
+        resample: int,
+    ) -> "PILImage.Image":
+        if target_w <= 0 or target_h <= 0:
+            raise ValueError("目标尺寸非法，无法进行黑边填充")
+
+        src_w, src_h = image.width, image.height
+        if src_w <= 0 or src_h <= 0:
+            raise ValueError("源图尺寸非法，无法进行黑边填充")
+
+        scale = min(target_w / src_w, target_h / src_h)
+        fit_w = max(1, int(round(src_w * scale)))
+        fit_h = max(1, int(round(src_h * scale)))
+
+        if fit_w == src_w and fit_h == src_h:
+            fitted = image
+        else:
+            fitted = image.resize((fit_w, fit_h), resample)
+
+        if fit_w == target_w and fit_h == target_h:
+            return fitted
+
+        try:
+            from PIL import Image
+        except ImportError as exc:
+            raise ImportError(
+                "未安装 Pillow，无法生成黑边缩略图。请先安装 pillow。"
+            ) from exc
+
+        canvas = Image.new("RGB", (target_w, target_h), (0, 0, 0))
+        offset_x = (target_w - fit_w) // 2
+        offset_y = (target_h - fit_h) // 2
+        canvas.paste(fitted, (offset_x, offset_y))
+        return canvas
 
     def _sample_sequentially(
         self,
