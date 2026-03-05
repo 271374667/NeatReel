@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Sequence
 from collections import Counter
 from enum import Enum
+import math
 import sys
 
 import av
@@ -78,24 +79,16 @@ class VideoMerger:
         },
     }
 
-    def __init__(
-        self,
-        target_fps: int = 30,
-        enable_border_detection: bool = True,
-        process_mode: VideoProcessMode = VideoProcessMode.BALANCED,
-    ) -> None:
-        if target_fps <= 0:
-            raise ValueError("target_fps 必须是正整数")
-        self.target_fps = target_fps
-        self.enable_border_detection = enable_border_detection
-        self.process_mode = process_mode
+    def __init__(self) -> None:
         self.progress_reporter = ProgressReporter(enable_tqdm=True)
 
     def merge(
         self,
         input_files: Sequence[InputVideoInfo],
         output_file: Path,
-        fps: int | None = None,
+        process_mode: VideoProcessMode = VideoProcessMode.BALANCED,
+        enable_border_detection: bool = True,
+        target_fps: int = -1,
         orientation: Orientation = Orientation.VERTICAL,
         target_resolution: tuple[int, int] | None = None,
         cover_image_path: Path | None = None,
@@ -106,10 +99,14 @@ class VideoMerger:
             raise TypeError("input_files 的元素类型必须是 InputVideoInfo")
         if not isinstance(output_file, Path):
             raise TypeError("output_file 类型必须是 pathlib.Path")
-        if fps is not None and not isinstance(fps, int):
-            raise TypeError("fps 类型必须是 int 或 None")
-        if fps is not None and fps <= 0:
-            raise ValueError("fps 必须是正整数或 None")
+        if not isinstance(process_mode, VideoProcessMode):
+            raise TypeError("process_mode 类型必须是 VideoProcessMode")
+        if not isinstance(enable_border_detection, bool):
+            raise TypeError("enable_border_detection 类型必须是 bool")
+        if not isinstance(target_fps, int):
+            raise TypeError("target_fps 类型必须是 int")
+        if target_fps != -1 and target_fps <= 0:
+            raise ValueError("target_fps 必须为 -1 或正整数")
 
         # ===== 预处理: 收集裁剪、旋转信息、有效尺寸、帧率和音频采样率 =====
         preprocessed: list[tuple[CropResult | None, Rotation]] = []
@@ -126,7 +123,7 @@ class VideoMerger:
             crop_result = video_info.crop_result
             if crop_result is not None and not crop_result.has_border:
                 crop_result = None
-            if crop_result is None and self.enable_border_detection:
+            if crop_result is None and enable_border_detection:
                 crop_result = self._detect_border(input_file)
 
             # 获取原始尺寸、帧率和音频采样率
@@ -175,13 +172,13 @@ class VideoMerger:
             effective_dimensions.append((final_w, final_h))
 
         # ===== 确定目标帧率和音频采样率 =====
-        if fps is not None:
-            effective_fps = fps
+        if target_fps != -1:
+            effective_fps = target_fps
         else:
             effective_fps = (
-                max(int(round(f)) for f in source_fps_values)
+                max(int(math.ceil(f)) for f in source_fps_values)
                 if source_fps_values
-                else self.target_fps
+                else 30
             )
         target_audio_rate = max(source_audio_rates) if source_audio_rates else 44100
         target_fps_fraction = Fraction(effective_fps, 1)
@@ -219,7 +216,7 @@ class VideoMerger:
         # 在 mux 任何 packet 之前，先把视频和音频两个输出流都注册好，
         # 否则 MP4 muxer 在首次 mux() 时写入 header，
         # 遗漏后续添加的 stream，导致输出文件损坏。
-        mode_cfg = self._MODE_CONFIGS[self.process_mode]
+        mode_cfg = self._MODE_CONFIGS[process_mode]
 
         out_video = output_container.add_stream("libx264", rate=target_fps_fraction)
         out_video.width = target_width
@@ -547,10 +544,9 @@ class VideoMerger:
 
 
 if __name__ == "__main__":
-    merger = VideoMerger(
-        process_mode=VideoProcessMode.SPEED,
-    )
+    merger = VideoMerger()
     merger.merge(
+        process_mode=VideoProcessMode.SPEED,
         input_files=[
             # InputVideoInfo(file_path=Path(r"C:\Users\PythonImporter\Videos\Captures\1.mp4"), rotation=Rotation.ROTATE_90),
             InputVideoInfo(

@@ -245,7 +245,7 @@ Item {
 
                                         ComboBox {
                                             Layout.fillWidth: true
-                                            model: ["速度", "普通", "质量"]
+                                            model: ["速度", "均衡", "质量"]
                                             currentIndex: 1
                                             HandCursor {}
                                         }
