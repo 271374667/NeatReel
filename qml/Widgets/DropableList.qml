@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.FluentWinUI3
 import QtQuick.Layouts
 import QtQuick.Dialogs
+import "../"
 
 Item {
     id: root
@@ -306,6 +307,10 @@ Item {
                 clip: true
                 spacing: 2
                 boundsBehavior: Flickable.StopAtBounds
+
+                ScrollBar.vertical: ScrollBar {
+                    visible: listView.contentHeight > listView.height
+                }
 
             // ── 全局位移动画 ──
             displaced: Transition {
