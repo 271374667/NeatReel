@@ -15,7 +15,9 @@ from __future__ import annotations
 
 from collections import Counter
 from functools import lru_cache, wraps
+from io import BytesIO
 import math
+import os
 from pathlib import Path
 import time
 
@@ -39,9 +41,31 @@ if TYPE_CHECKING:
 
 _CACHE_MISS = object()
 _READ_INFO_CACHE_VERSION = 1
-_THUMB_CACHE_VERSION = 1
+_THUMB_CACHE_VERSION = 2
+_CACHE_MAX_SIZE_MB = max(1, int(os.getenv("VIDEO_INFO_CACHE_MAX_SIZE_MB", "500")))
+_CACHE_EXPIRE_SECONDS = max(
+    60, int(os.getenv("VIDEO_INFO_CACHE_EXPIRE_SECONDS", str(24 * 60 * 60)))
+)
+_THUMB_CACHE_CODEC = os.getenv("VIDEO_INFO_THUMB_CACHE_CODEC", "jpeg").lower()
+_THUMB_CACHE_JPEG_QUALITY = min(
+    95, max(60, int(os.getenv("VIDEO_INFO_THUMB_CACHE_JPEG_QUALITY", "88")))
+)
+_THUMB_CACHE_WEBP_QUALITY = min(
+    95, max(60, int(os.getenv("VIDEO_INFO_THUMB_CACHE_WEBP_QUALITY", "82")))
+)
+_THUMB_CACHE_WEBP_METHOD = min(
+    6, max(0, int(os.getenv("VIDEO_INFO_THUMB_CACHE_WEBP_METHOD", "1")))
+)
 _MODULE_CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache" / "video_info_reader"
-_MODULE_CACHE = Cache(str(_MODULE_CACHE_DIR))
+_MODULE_CACHE = Cache(
+    str(_MODULE_CACHE_DIR), size_limit=_CACHE_MAX_SIZE_MB * 1024 * 1024
+)
+
+
+def _effective_thumb_codec() -> str:
+    if _THUMB_CACHE_CODEC in {"jpeg", "webp", "raw"}:
+        return _THUMB_CACHE_CODEC
+    return "jpeg"
 
 
 def _crop_to_cache_tuple(crop_result: Optional["CropResult"]) -> tuple | None:
@@ -81,8 +105,6 @@ def _read_info_key_builder(
         reader.morph_kernel_size,
         reader.min_region_ratio,
         reader.scene_change_threshold,
-        reader.min_change_coverage,
-        reader.adaptive_threshold,
         reader.seek_skip_frames,
         reader.spatial_edge_threshold,
         reader.spatial_border_max_brightness,
@@ -114,12 +136,19 @@ def _generate_thumb_key_builder(
         int(thumb_resolution[1]),
         _crop_to_cache_tuple(crop_result),
         int(rotate_angle),
+        _effective_thumb_codec(),
+        _THUMB_CACHE_JPEG_QUALITY,
+        _THUMB_CACHE_WEBP_QUALITY,
+        _THUMB_CACHE_WEBP_METHOD,
     )
 
 
 def _diskcache_method(
     key_builder: Callable[..., tuple | None],
     on_hit: Callable[[Any], None] | None = None,
+    serializer: Callable[[Any], Any] | None = None,
+    deserializer: Callable[[Any], Any] | None = None,
+    expire_seconds: int = _CACHE_EXPIRE_SECONDS,
 ):
     def decorator(func: Callable):
         @wraps(func)
@@ -132,15 +161,57 @@ def _diskcache_method(
             if cached is not _CACHE_MISS:
                 if on_hit is not None:
                     on_hit(self)
-                return cached
+                return deserializer(cached) if deserializer is not None else cached
 
             result = func(self, *args, **kwargs)
-            _MODULE_CACHE.set(key, result)
+            value_to_cache = serializer(result) if serializer is not None else result
+            _MODULE_CACHE.set(key, value_to_cache, expire=expire_seconds)
             return result
 
         return wrapper
 
     return decorator
+
+
+def _serialize_thumb_cache_value(image: "PILImage.Image") -> tuple[str, Any]:
+    codec = _effective_thumb_codec()
+    if codec == "raw":
+        return ("raw", image.copy())
+
+    rgb = image if image.mode == "RGB" else image.convert("RGB")
+    buff = BytesIO()
+    if codec == "webp":
+        rgb.save(
+            buff,
+            format="WEBP",
+            quality=_THUMB_CACHE_WEBP_QUALITY,
+            method=_THUMB_CACHE_WEBP_METHOD,
+        )
+        return ("webp", buff.getvalue())
+
+    rgb.save(
+        buff,
+        format="JPEG",
+        quality=_THUMB_CACHE_JPEG_QUALITY,
+        optimize=False,
+        progressive=False,
+    )
+    return ("jpeg", buff.getvalue())
+
+
+def _deserialize_thumb_cache_value(payload: tuple[str, Any]) -> "PILImage.Image":
+    tag, data = payload
+    if tag == "raw":
+        return data.copy()
+
+    try:
+        from PIL import Image
+    except ImportError as exc:
+        raise ImportError("未安装 Pillow，无法读取缩略图缓存。请先安装 pillow。") from exc
+
+    img = Image.open(BytesIO(data))
+    img.load()
+    return img.convert("RGB") if img.mode != "RGB" else img
 
 
 @lru_cache(maxsize=32)
@@ -230,10 +301,6 @@ class VideoInfoReader:
         min_region_ratio: float = 0.002,
         # 场景切换阈值
         scene_change_threshold: float = 60.0,
-        # 有效变化区域占主体区域的最小比例
-        min_change_coverage: float = 0.05,
-        # 是否启用自适应阈值（开启后 diff_threshold 作为下限兜底）
-        adaptive_threshold: bool = True,
         # seek 后跳过的帧数（让画面定位更接近目标时刻）
         seek_skip_frames: int = 2,
         # ---- 空域分析参数 ----
@@ -249,8 +316,6 @@ class VideoInfoReader:
         self.morph_kernel_size = morph_kernel_size
         self.min_region_ratio = min_region_ratio
         self.scene_change_threshold = scene_change_threshold
-        self.min_change_coverage = min_change_coverage
-        self.adaptive_threshold = adaptive_threshold
         self.seek_skip_frames = seek_skip_frames
 
         # 空域分析参数
@@ -375,7 +440,11 @@ class VideoInfoReader:
                     idx += 1
         raise ValueError(f"帧索引 {frame_index} 超出视频范围: {video_path}")
 
-    @_diskcache_method(_generate_thumb_key_builder)
+    @_diskcache_method(
+        _generate_thumb_key_builder,
+        serializer=_serialize_thumb_cache_value,
+        deserializer=_deserialize_thumb_cache_value,
+    )
     def generate_thumb_image(
         self,
         video_path: Path | str,
