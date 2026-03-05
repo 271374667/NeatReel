@@ -4,8 +4,10 @@ import "../"
 
 Item {
     id: root
-    width: 640
+    width: 854
     height: 480
+    implicitWidth: 854
+    implicitHeight: 480
 
     // ══════════════════════════════════════
     //  状态枚举
@@ -20,7 +22,7 @@ Item {
     // ══════════════════════════════════════
     //  公共属性
     // ══════════════════════════════════════
-    property int displayState: DisplayScreen.State.Loading   // 当前显示状态
+    property int displayState: DisplayScreen.State.Normal   // 当前显示状态
 
     property url frameSource: ""            // 后端传来的画面 source（image:// 或 file:// 等）
     property real cornerRadius: 8           // 圆角半径
@@ -30,7 +32,7 @@ Item {
     property int iconSize: 96                  // 状态图标尺寸
     property int textSize: 18                  // 提示文字大小
     property color textColor: "#888888"        // 提示文字颜色
-    property int loadingTimeoutMs: 3000        // Loading 超时毫秒（可修改）
+    property int loadingTimeoutMs: 10000        // Loading 超时毫秒（可修改）
     property string defaultErrorText: "无法打开该视频"
     property string loadingTimeoutErrorText: "视频加载超时\n请检查视频文件是否正常"
     property string errorText: defaultErrorText
