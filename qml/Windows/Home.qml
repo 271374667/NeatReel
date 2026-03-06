@@ -17,12 +17,28 @@ Item {
     property bool topActionButtonsDebouncing: false
     property string previewFrameSource: ""
     property bool showingOriginal: false
+    property int previewDisplayState: DisplayScreen.State.Waiting
+    readonly property bool hasSelectedVideo: (
+        typeof dropList !== "undefined"
+        && dropList.currentIndex >= 0
+        && videoInfoItem.filePath !== ""
+    )
+    readonly property bool hasPreviewThumbnail: (
+        previewDisplayState === DisplayScreen.State.Normal
+        && previewFrameSource !== ""
+    )
+    readonly property bool topActionButtonsEnabled: (
+        !topActionButtonsDebouncing
+        && hasSelectedVideo
+        && hasPreviewThumbnail
+    )
 
     // ── backend signal connections ──
     Connections {
         target: homeService
 
         function onDisplayStateChanged(state) {
+            root.previewDisplayState = state
             if (state === 0) displayScreen.setWaiting()
             else if (state === 1) displayScreen.setLoading()
             else if (state === 2) displayScreen.setNormal()
@@ -45,6 +61,7 @@ Item {
         }
 
         function onErrorOccurred(message) {
+            root.previewFrameSource = ""
             displayScreen.setError(message)
         }
     }
@@ -197,7 +214,7 @@ Item {
                             text: root.showingOriginal ? "预览去黑边后的视频" : "预览原视频(不去黑边)"
                             Layout.fillWidth: true
                             icon.source: ImagePath.crop
-                            enabled: !root.topActionButtonsDebouncing
+                            enabled: root.topActionButtonsEnabled
                             onClicked: {
                                 root.beginTopActionButtonsDebounce()
                                 if (videoInfoItem.filePath) {
@@ -229,7 +246,7 @@ Item {
                                 text: "顺时针旋转90°"
                                 Layout.fillWidth: true
                                 icon.source: ImagePath.clockwise
-                                enabled: !root.topActionButtonsDebouncing
+                                enabled: root.topActionButtonsEnabled
                                 onClicked: {
                                     root.beginTopActionButtonsDebounce()
                                     root.updateRotationAngle(90)
@@ -248,7 +265,7 @@ Item {
                                 text: "逆时针旋转90°"
                                 Layout.fillWidth: true
                                 icon.source: ImagePath.counterClockwise
-                                enabled: !root.topActionButtonsDebouncing
+                                enabled: root.topActionButtonsEnabled
                                 onClicked: {
                                     root.beginTopActionButtonsDebounce()
                                     root.updateRotationAngle(-90)
