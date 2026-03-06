@@ -34,6 +34,11 @@ class InputVideoInfo:
     file_path: Path
     crop_result: CropResult | None = None
     rotation: Rotation | None = None
+    width: int | None = None
+    height: int | None = None
+    fps: float | None = None
+    audio_sample_rate: int | None = None
+    total_frames: int | None = None
 
 
 class Orientation(Enum):
@@ -125,35 +130,54 @@ class VideoMerger:
             if not input_file.exists():
                 raise FileNotFoundError(f"文件不存在: {input_file}")
 
-            # 获取裁剪信息
+            # 复用调用方预先计算的裁剪结果；仅在完全缺失时才再次检测
             crop_result = video_info.crop_result
-            if crop_result is not None and not crop_result.has_border:
-                crop_result = None
             if crop_result is None and enable_border_detection:
                 crop_result = self._detect_border(input_file)
+            effective_crop = (
+                crop_result
+                if crop_result is not None and crop_result.has_border
+                else None
+            )
 
-            # 获取原始尺寸、帧率和音频采样率
-            probe_container = av.open(str(input_file))
-            try:
-                in_video_stream = probe_container.streams.video[0]
-                raw_w, raw_h = int(in_video_stream.width), int(in_video_stream.height)
-                video_fps = float(
-                    in_video_stream.average_rate or in_video_stream.rate or 30
-                )
-                source_fps_values.append(video_fps)
-            except IndexError:
-                probe_container.close()
-                raise ValueError(f"文件缺少视频流: {input_file}")
-            try:
-                in_audio_stream = probe_container.streams.audio[0]
-                source_audio_rates.append(in_audio_stream.rate)
-            except IndexError:
-                pass
-            probe_container.close()
+            raw_w = video_info.width
+            raw_h = video_info.height
+            video_fps = video_info.fps
+            audio_rate = video_info.audio_sample_rate
+
+            # 仅当调用方没有提供完整元数据时，才回退到 probe。
+            if (
+                raw_w is None
+                or raw_h is None
+                or video_fps is None
+                or video_fps <= 0
+                or audio_rate is None
+            ):
+                with av.open(str(input_file)) as probe_container:
+                    try:
+                        in_video_stream = probe_container.streams.video[0]
+                    except IndexError as exc:
+                        raise ValueError(f"文件缺少视频流: {input_file}") from exc
+
+                    raw_w = int(in_video_stream.width)
+                    raw_h = int(in_video_stream.height)
+                    video_fps = float(
+                        in_video_stream.average_rate or in_video_stream.rate or 30
+                    )
+
+                    try:
+                        in_audio_stream = probe_container.streams.audio[0]
+                        audio_rate = int(in_audio_stream.rate)
+                    except IndexError:
+                        audio_rate = -1
+
+            source_fps_values.append(video_fps)
+            if audio_rate > 0:
+                source_audio_rates.append(audio_rate)
 
             # 裁剪后的有效尺寸
-            if crop_result is not None:
-                eff_w, eff_h = crop_result.width, crop_result.height
+            if effective_crop is not None:
+                eff_w, eff_h = effective_crop.width, effective_crop.height
             else:
                 eff_w, eff_h = raw_w, raw_h
 
@@ -174,7 +198,7 @@ class VideoMerger:
             else:
                 final_w, final_h = eff_w, eff_h
 
-            preprocessed.append((crop_result, effective_rotation))
+            preprocessed.append((effective_crop, effective_rotation))
             effective_dimensions.append((final_w, final_h))
 
         # ===== 确定目标帧率和音频采样率 =====
@@ -298,7 +322,9 @@ class VideoMerger:
                 # 多线程解码不影响画质，始终启用
                 in_video.thread_type = "AUTO"
 
-                estimated_total_frames = int(in_video.frames or 0)
+                estimated_total_frames = int(video_info.total_frames or 0)
+                if estimated_total_frames <= 0:
+                    estimated_total_frames = int(in_video.frames or 0)
                 if (
                     estimated_total_frames <= 0
                     and in_video.duration is not None

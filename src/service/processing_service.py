@@ -107,6 +107,11 @@ class _MergeWorker(QThread):
                         file_path=Path(item["filePath"]),
                         crop_result=info.crop_result,
                         rotation=rotation,
+                        width=info.width,
+                        height=info.height,
+                        fps=info.fps,
+                        audio_sample_rate=info.audio_sample_rate,
+                        total_frames=info.total_frames,
                     )
                 )
 
