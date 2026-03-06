@@ -17,4 +17,6 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = []
+dev = [
+    "nuitka>=4.0.2",
+]
