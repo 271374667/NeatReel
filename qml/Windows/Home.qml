@@ -16,6 +16,38 @@ Item {
     property bool orientationDebouncing: false
     property bool topActionButtonsDebouncing: false
     property string previewFrameSource: ""
+    property bool showingOriginal: false
+
+    // ── backend signal connections ──
+    Connections {
+        target: homeService
+
+        function onDisplayStateChanged(state) {
+            if (state === 0) displayScreen.setWaiting()
+            else if (state === 1) displayScreen.setLoading()
+            else if (state === 2) displayScreen.setNormal()
+            else if (state === 3) displayScreen.setError("")
+        }
+
+        function onThumbnailReady(imageUrl) {
+            root.previewFrameSource = imageUrl
+        }
+
+        function onVideoInfoReady(durationAndResolution) {
+            videoInfoItem.durationAndResolution = durationAndResolution
+        }
+
+        function onRecommendedRotationReady(angle) {
+            videoInfoItem.rotationAngle = angle
+            if (typeof dropList !== "undefined" && dropList.currentIndex >= 0) {
+                dropList.setItemRotation(dropList.currentIndex, angle)
+            }
+        }
+
+        function onErrorOccurred(message) {
+            displayScreen.setError(message)
+        }
+    }
 
     function beginOrientationDebounce() {
         orientationDebouncing = true
@@ -88,6 +120,7 @@ Item {
                 anchors.fill: parent
                 onLeftclicked: function(data) {
                     if (data && data.filePath) {
+                        root.showingOriginal = false
                         videoInfoItem.filePath = data.filePath
                         var pathStr = data.filePath.toString().replace(/\\/g, "/")
                         var parts = pathStr.split("/")
@@ -95,6 +128,11 @@ Item {
                         if (data.rotation !== undefined) {
                             videoInfoItem.rotationAngle = data.rotation
                         }
+                        homeService.onVideoItemClicked(
+                            data.filePath,
+                            videoInfoItem.rotationAngle,
+                            landscapeRadio.checked
+                        )
                     }
                 }
             }
@@ -143,13 +181,31 @@ Item {
                             frameSource: root.previewFrameSource
                         }
 
-                        // ── 预览去黑边效果 ── 
+                        // ── 预览去黑边效果（切换按钮） ──
                         Button {
-                            text: "预览原视频(不去黑边)"
+                            text: root.showingOriginal ? "预览去黑边后的视频" : "预览原视频(不去黑边)"
                             Layout.fillWidth: true
                             icon.source: ImagePath.crop
                             enabled: !root.topActionButtonsDebouncing
-                            onClicked: root.beginTopActionButtonsDebounce()
+                            onClicked: {
+                                root.beginTopActionButtonsDebounce()
+                                if (videoInfoItem.filePath) {
+                                    root.showingOriginal = !root.showingOriginal
+                                    if (root.showingOriginal) {
+                                        homeService.onPreviewOriginal(
+                                            videoInfoItem.filePath,
+                                            videoInfoItem.rotationAngle,
+                                            landscapeRadio.checked
+                                        )
+                                    } else {
+                                        homeService.onRotatePreview(
+                                            videoInfoItem.filePath,
+                                            videoInfoItem.rotationAngle,
+                                            landscapeRadio.checked
+                                        )
+                                    }
+                                }
+                            }
                             HandCursor {}
                         }
 
@@ -166,6 +222,13 @@ Item {
                                 onClicked: {
                                     root.beginTopActionButtonsDebounce()
                                     root.updateRotationAngle(90)
+                                    if (videoInfoItem.filePath) {
+                                        homeService.onRotatePreview(
+                                            videoInfoItem.filePath,
+                                            videoInfoItem.rotationAngle,
+                                            landscapeRadio.checked
+                                        )
+                                    }
                                 }
                                 HandCursor {}
                             }
@@ -178,6 +241,13 @@ Item {
                                 onClicked: {
                                     root.beginTopActionButtonsDebounce()
                                     root.updateRotationAngle(-90)
+                                    if (videoInfoItem.filePath) {
+                                        homeService.onRotatePreview(
+                                            videoInfoItem.filePath,
+                                            videoInfoItem.rotationAngle,
+                                            landscapeRadio.checked
+                                        )
+                                    }
                                 }
                                 HandCursor {}
                             }
@@ -277,6 +347,7 @@ Item {
                                         }
 
                                         ComboBox {
+                                            id: videoProcessMode
                                             Layout.fillWidth: true
                                             model: ["速度", "均衡", "质量"]
                                             currentIndex: 1
@@ -302,6 +373,7 @@ Item {
                                     Item { Layout.fillWidth: true }
 
                                     CoverSelecter {
+                                        id: coverSelecter
                                         Layout.alignment: Qt.AlignVCenter
                                     }
                                 }
@@ -381,7 +453,15 @@ Item {
         text: "开始处理"
         highlighted: true
         icon.source: ImagePath.play
-        onClicked: root.startProcessing()
+        onClicked: {
+            var items = dropList.getAllItems()
+            if (items.length === 0) return
+            var processMode = videoProcessMode.currentIndex
+            var isLandscape = landscapeRadio.checked
+            var coverPath = coverSelecter.hasCover ? coverSelecter.coverSource.toString() : ""
+            homeService.onStartProcessing(processMode, isLandscape, coverPath, items)
+            root.startProcessing()
+        }
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.rightMargin: 24

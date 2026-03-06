@@ -64,6 +64,7 @@ class _ThumbnailWorker(QThread):
         rotate_angle: int,
         orientation: int,
         no_crop: bool,
+        auto_detect_rotation: bool = False,
     ):
         super().__init__()
         self._request_id = request_id
@@ -71,6 +72,7 @@ class _ThumbnailWorker(QThread):
         self._rotate_angle = rotate_angle
         self._orientation = orientation
         self._no_crop = no_crop
+        self._auto_detect_rotation = auto_detect_rotation
 
     def run(self) -> None:
         try:
@@ -81,10 +83,24 @@ class _ThumbnailWorker(QThread):
             if not self._no_crop and video_info.crop_result is not None and video_info.crop_result.has_border:
                 crop = video_info.crop_result
 
+            # Auto-detect rotation: check if cropped dimensions already match target orientation
+            rotate_angle = self._rotate_angle
+            recommended_rotation = None
+            if self._auto_detect_rotation:
+                eff_w = crop.width if crop is not None else video_info.width
+                eff_h = crop.height if crop is not None else video_info.height
+                # orientation: 0=landscape (width>=height), 1=portrait (height>width)
+                if self._orientation == 0:
+                    orientation_matches = eff_w >= eff_h
+                else:
+                    orientation_matches = eff_h > eff_w
+                recommended_rotation = 0 if orientation_matches else 90
+                rotate_angle = recommended_rotation
+
             pil_image = reader.generate_thumb_image(
                 video_path=self._video_path,
                 crop_result=crop,
-                rotate_angle=self._rotate_angle,
+                rotate_angle=rotate_angle,
                 orientation=self._orientation,
             )
 
@@ -96,6 +112,8 @@ class _ThumbnailWorker(QThread):
                     f" / {video_info.width}x{video_info.height}"
                 ),
             }
+            if recommended_rotation is not None:
+                info_dict["recommendedRotation"] = recommended_rotation
             self.finished.emit(self._request_id, qimage, info_dict)
         except Exception as exc:
             logger.exception("thumbnail worker error")
@@ -168,6 +186,7 @@ class HomeService(QObject):
     displayStateChanged = Signal(int)       # 0=Waiting 1=Loading 2=Normal 3=Error
     thumbnailReady = Signal(str)            # image://thumbnail/<id>
     videoInfoReady = Signal(str)            # durationAndResolution string
+    recommendedRotationReady = Signal(int)  # auto-detected rotation angle (0 or 90)
     errorOccurred = Signal(str)
     mergeStarted = Signal()
     mergeFinished = Signal()
@@ -190,6 +209,7 @@ class HomeService(QObject):
         rotate_angle: int,
         orientation: int,
         no_crop: bool,
+        auto_detect_rotation: bool = False,
     ) -> None:
         self._cleanup_workers()
         self._thumb_request_id += 1
@@ -197,7 +217,7 @@ class HomeService(QObject):
 
         self.displayStateChanged.emit(1)  # Loading
 
-        worker = _ThumbnailWorker(rid, file_path, rotate_angle, orientation, no_crop)
+        worker = _ThumbnailWorker(rid, file_path, rotate_angle, orientation, no_crop, auto_detect_rotation)
         worker.finished.connect(self._on_thumbnail_ready)
         worker.error.connect(self._on_thumbnail_error)
         worker.start()
@@ -213,6 +233,8 @@ class HomeService(QObject):
 
         self.thumbnailReady.emit(f"image://thumbnail/{image_id}")
         self.videoInfoReady.emit(info_dict["durationAndResolution"])
+        if "recommendedRotation" in info_dict:
+            self.recommendedRotationReady.emit(info_dict["recommendedRotation"])
         self.displayStateChanged.emit(2)  # Normal
 
     def _on_thumbnail_error(self, request_id: int, message: str) -> None:
@@ -232,7 +254,7 @@ class HomeService(QObject):
     @Slot(str, int, bool)
     def onVideoItemClicked(self, file_path: str, rotation_angle: int, is_landscape: bool) -> None:
         orientation = 0 if is_landscape else 1
-        self._generate_thumbnail(file_path, rotation_angle, orientation, no_crop=False)
+        self._generate_thumbnail(file_path, rotation_angle, orientation, no_crop=False, auto_detect_rotation=True)
 
     @Slot(str, int, bool)
     def onRotatePreview(self, file_path: str, rotation_angle: int, is_landscape: bool) -> None:

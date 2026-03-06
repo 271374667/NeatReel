@@ -22,7 +22,7 @@ Item {
     // ══════════════════════════════════════
     //  公共属性
     // ══════════════════════════════════════
-    property int displayState: DisplayScreen.State.Normal   // 当前显示状态
+    property int displayState: DisplayScreen.State.Waiting   // 当前显示状态
 
     property url frameSource: ""            // 后端传来的画面 source（image:// 或 file:// 等）
     property real cornerRadius: 8           // 圆角半径

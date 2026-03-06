@@ -79,10 +79,10 @@ Item {
     // ── 内联 ListModel，填充随机数据 ──
     ListModel {
         id: videoModel
-        ListElement {
-            filePath: "C:/Users/PythonImporter/Videos/Captures/示例视频 _01.mp4"
-            rotation: 90
-        }
+        // ListElement {
+        //     filePath: "C:/Users/PythonImporter/Videos/Captures/示例视频 _01.mp4"
+        //     rotation: 90
+        // }
         // ListElement {
         //     fileName: "旅拍合集_Summer_2025.mp4"
         //     filePath: "D:/MediaLibrary/Projects/Travel/Summer2025/旅拍合集_Summer_2025.mp4"
@@ -141,6 +141,15 @@ Item {
     }
     function requestGetAllData() {
         root.emitAllData();
+    }
+
+    function getAllItems() {
+        var items = [];
+        for (var i = 0; i < videoModel.count; i++) {
+            var it = videoModel.get(i);
+            items.push({ filePath: it.filePath, rotation: it.rotation });
+        }
+        return items;
     }
 
     // ── 获取和更新旋转角度 ──

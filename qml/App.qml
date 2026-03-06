@@ -13,7 +13,7 @@ Window {
     visible: true
     title: "VideoMerger"
     color: "#f5f7fa"
-    readonly property url defaultPreviewFrameSource: "file:///G:/CodingSpace/Project/VideoMerger/output.png"
+    readonly property url defaultPreviewFrameSource: ""
     property bool onProcessingPage: false
 
     function resolvePreviewFrameSource(source) {
