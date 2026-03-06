@@ -163,6 +163,7 @@ class ProcessingService(QObject):
         # Speed tracking (sliding window)
         self._speed_samples: deque[tuple[float, int]] = deque(maxlen=30)
         self._cumulative_frames = 0
+        self._file_start_time = 0.0
 
         # Connect MergeSignals
         signals = get_merge_signals()
@@ -260,6 +261,7 @@ class ProcessingService(QObject):
         self._current_total_frames = max(1, total_frames)
         self._speed_samples.clear()
         self._cumulative_frames = 0
+        self._file_start_time = monotonic()
 
         self.totalCurrentChanged.emit(file_index)
         self.stageNameChanged.emit(f"处理文件 {file_index}/{self._total_files}: {file_name}")
@@ -347,17 +349,16 @@ class ProcessingService(QObject):
         return frames_per_second / self._effective_fps
 
     def _compute_remaining(self) -> str:
-        elapsed = monotonic() - self._start_time
-        if self._total_files <= 0 or elapsed < 1.0:
+        if self._file_start_time <= 0 or self._current_total_frames <= 0:
             return ""
 
-        stage_progress = 0.0
-        if self._current_total_frames > 0:
-            stage_progress = min(1.0, self._current_frames / self._current_total_frames)
-
-        overall = (self._completed_files + stage_progress) / self._total_files
-        if overall <= 0.01:
+        elapsed = monotonic() - self._file_start_time
+        if elapsed < 1.0:
             return ""
 
-        remaining_seconds = elapsed * (1.0 - overall) / overall
+        stage_progress = min(1.0, self._current_frames / self._current_total_frames)
+        if stage_progress <= 0.01:
+            return ""
+
+        remaining_seconds = elapsed * (1.0 - stage_progress) / stage_progress
         return _format_remaining(remaining_seconds)

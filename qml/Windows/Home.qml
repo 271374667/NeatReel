@@ -135,6 +135,17 @@ Item {
                         )
                     }
                 }
+                onItemRemoved: function(filePath) {
+                    if (videoInfoItem.filePath === filePath) {
+                        root.previewFrameSource = ""
+                        root.showingOriginal = false
+                        videoInfoItem.fileName = ""
+                        videoInfoItem.filePath = ""
+                        videoInfoItem.durationAndResolution = ""
+                        videoInfoItem.rotationAngle = 0
+                        displayScreen.setWaiting()
+                    }
+                }
             }
         }
 
@@ -472,6 +483,7 @@ Item {
         text: "开始处理"
         highlighted: true
         icon.source: ImagePath.play
+        enabled: dropList.itemCount > 0
         onClicked: {
             var items = dropList.getAllItems()
             if (items.length === 0) return

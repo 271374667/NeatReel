@@ -10,6 +10,10 @@ Item {
     height: 500
     signal leftclicked(var data)
     signal get_all_data(var paths)
+    signal itemRemoved(string filePath)
+
+    // ── 对外暴露列表数量 ──
+    property int itemCount: videoModel.count
 
     // ── 公共属性 ──
     property int currentIndex: -1
@@ -67,7 +71,11 @@ Item {
     function removeSelectedItems() {
         var indices = Object.keys(selectedIndices).map(function(k) { return parseInt(k); });
         indices.sort(function(a, b) { return b - a; });
-        for (var i = 0; i < indices.length; i++) videoModel.remove(indices[i], 1);
+        for (var i = 0; i < indices.length; i++) {
+            var removedPath = videoModel.get(indices[i]).filePath;
+            videoModel.remove(indices[i], 1);
+            root.itemRemoved(removedPath);
+        }
         clearSelection();
     }
     property bool externalDragHover: false
@@ -238,7 +246,9 @@ Item {
     // ── 删除 ──
     function removeItem(idx) {
         if (idx >= 0 && idx < videoModel.count) {
+            var removedPath = videoModel.get(idx).filePath;
             videoModel.remove(idx, 1);
+            root.itemRemoved(removedPath);
             clearSelection();
         }
     }
