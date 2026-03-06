@@ -8,4 +8,4 @@ OUTPUT_DIR = PROJECT_ROOT / "output"
 IMAGES_DIR = PROJECT_ROOT / "qml" / "Images"
 
 # FILE
-LOGO_FILE = IMAGES_DIR / "SmallLogo.svg"
+LOGO_FILE = IMAGES_DIR / "SmallLogo.png"

@@ -7,15 +7,13 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-BUILD_ROOT = PROJECT_ROOT / "build" / "nuitka"
-DIST_DIR = BUILD_ROOT / "NeatReel.dist"
+BUILD_ROOT = PROJECT_ROOT / "build" / "pyinstaller"
+DIST_ROOT = PROJECT_ROOT / "dist"
+DIST_DIR = DIST_ROOT / "NeatReel"
 COMPILE_SCRIPT = PROJECT_ROOT / "scripts" / "compile.py"
 LAUNCHER_FILE = BUILD_ROOT / "_release_main.py"
-RESOURCE_DIR = PROJECT_ROOT / "src" / "resources"
-RESOURCE_FILES = [
-    RESOURCE_DIR / "qml_resources.py",
-    RESOURCE_DIR / "qml_resources.qrc",
-]
+ICON_FILE = PROJECT_ROOT / "qml" / "Images" / "SmallLogo.png"
+SPLASH_FILE = PROJECT_ROOT / "qml" / "Images" / "Splash.png"
 
 
 def run_compile_resources() -> None:
@@ -33,44 +31,45 @@ def write_release_launcher() -> Path:
     return LAUNCHER_FILE
 
 
-def run_nuitka_build() -> None:
+def clean_previous_output() -> None:
+    if DIST_DIR.exists():
+        shutil.rmtree(DIST_DIR)
+
+
+def run_pyinstaller_build() -> None:
     launcher_file = write_release_launcher()
     command = [
         sys.executable,
         "-m",
-        "nuitka",
-        "--mode=standalone",
-        "--enable-plugin=pyside6",
-        "--include-qt-plugins=qml",
-        "--include-module=src.resources.qml_resources",
-        "--windows-console-mode=disable",
-        "--assume-yes-for-downloads",
-        f"--output-dir={BUILD_ROOT}",
-        "--output-filename=NeatReel",
-        "--remove-output",
-        str(launcher_file),
+        "PyInstaller",
+        "--noconfirm",
+        "--clean",
+        "--onedir",
+        "--windowed",
+        "--name",
+        "NeatReel",
+        "--distpath",
+        str(DIST_ROOT),
+        "--workpath",
+        str(BUILD_ROOT / "work"),
+        "--specpath",
+        str(BUILD_ROOT),
+        "--hidden-import",
+        "src.resources.qml_resources",
     ]
+    if ICON_FILE.exists():
+        command.extend(["--icon", str(ICON_FILE)])
+    if SPLASH_FILE.exists():
+        command.extend(["--splash", str(SPLASH_FILE)])
+    command.append(str(launcher_file))
     subprocess.run(command, cwd=PROJECT_ROOT, check=True)
-
-
-def copy_resource_files() -> None:
-    target_dir = DIST_DIR / "resources"
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    for resource_file in RESOURCE_FILES:
-        if not resource_file.exists():
-            raise FileNotFoundError(
-                f"Expected resource file was not generated: {resource_file}"
-            )
-
-        shutil.copy2(resource_file, target_dir / resource_file.name)
 
 
 def main() -> None:
     run_compile_resources()
-    run_nuitka_build()
-    copy_resource_files()
-    print(f"Nuitka build output: {DIST_DIR}")
+    clean_previous_output()
+    run_pyinstaller_build()
+    print(f"PyInstaller build output: {DIST_DIR}")
 
 
 if __name__ == "__main__":

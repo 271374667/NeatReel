@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -18,7 +18,19 @@ def resolve_window_icon(debug: bool) -> QIcon:
     if debug:
         return QIcon(str(LOGO_FILE))
 
-    return QIcon(":/qml/Images/SmallLogo.svg")
+    return QIcon(":/qml/Images/SmallLogo.png")
+
+
+def close_pyinstaller_splash() -> None:
+    try:
+        import pyi_splash
+    except ImportError:
+        return
+
+    try:
+        pyi_splash.close()
+    except Exception:
+        pass
 
 
 def load_main_qml(engine: QQmlApplicationEngine, *, debug: bool) -> None:
@@ -63,6 +75,7 @@ def main(*, debug: bool = DEBUG) -> None:
     if not engine.rootObjects():
         sys.exit(-1)
 
+    QTimer.singleShot(0, close_pyinstaller_splash)
     sys.exit(app.exec())
 
 

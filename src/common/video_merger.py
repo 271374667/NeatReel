@@ -27,7 +27,9 @@ logger.add(
     encoding="utf-8",
     enqueue=True,
 )
-logger.add(sys.stderr, level="INFO")
+stderr_sink = sys.stderr or sys.__stderr__
+if stderr_sink is not None:
+    logger.add(stderr_sink, level="INFO")
 
 
 @dataclass(frozen=True)
