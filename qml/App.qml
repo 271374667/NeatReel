@@ -6,10 +6,10 @@ import "Windows"
 
 Window {
     id: root
-    width: 780
-    height: 880
-    minimumWidth: 780
-    minimumHeight: 880
+    width: 900
+    height: 920
+    minimumWidth: 600
+    minimumHeight: 700
     visible: true
     title: "VideoMerger"
     color: "#f5f7fa"

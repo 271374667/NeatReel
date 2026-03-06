@@ -70,7 +70,7 @@ Item {
 
     Timer {
         id: orientationDebounceTimer
-        interval: 2000
+        interval: 1000
         repeat: false
         onTriggered: root.orientationDebouncing = false
     }
@@ -302,7 +302,17 @@ Item {
                                 checked: true
                                 ButtonGroup.group: orientationGroup
                                 enabled: !root.orientationDebouncing
-                                onClicked: root.beginOrientationDebounce()
+                                onClicked: {
+                                    root.beginOrientationDebounce()
+                                    if (videoInfoItem.filePath) {
+                                        root.showingOriginal = false
+                                        homeService.onVideoItemClicked(
+                                            videoInfoItem.filePath,
+                                            videoInfoItem.rotationAngle,
+                                            true
+                                        )
+                                    }
+                                }
                                 HandCursor {}
                             }
 
@@ -311,7 +321,17 @@ Item {
                                 text: "竖屏"
                                 ButtonGroup.group: orientationGroup
                                 enabled: !root.orientationDebouncing
-                                onClicked: root.beginOrientationDebounce()
+                                onClicked: {
+                                    root.beginOrientationDebounce()
+                                    if (videoInfoItem.filePath) {
+                                        root.showingOriginal = false
+                                        homeService.onVideoItemClicked(
+                                            videoInfoItem.filePath,
+                                            videoInfoItem.rotationAngle,
+                                            false
+                                        )
+                                    }
+                                }
                                 HandCursor {}
                             }
 
