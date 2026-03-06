@@ -11,7 +11,7 @@ Window {
     minimumWidth: 600
     minimumHeight: 700
     visible: true
-    title: "VideoMerger"
+    title: "净影连 NeatReel"
     color: "#f5f7fa"
     readonly property url defaultPreviewFrameSource: ""
     property bool onProcessingPage: false
