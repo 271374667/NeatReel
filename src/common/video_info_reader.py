@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 _CACHE_MISS = object()
 _READ_INFO_CACHE_VERSION = 1
-_THUMB_CACHE_VERSION = 9
+_THUMB_CACHE_VERSION = 10
 _CACHE_MAX_SIZE_MB = max(1, int(os.getenv("VIDEO_INFO_CACHE_MAX_SIZE_MB", "500")))
 _CACHE_EXPIRE_SECONDS = max(
     60, int(os.getenv("VIDEO_INFO_CACHE_EXPIRE_SECONDS", str(24 * 60 * 60)))
@@ -759,15 +759,74 @@ class VideoInfoReader:
         max_probe_packets = max(
             8, min(256, int(os.getenv("VIDEO_INFO_THUMB_SEEK_MAX_PACKETS", "64")))
         )
-        return [
-            self._seek_first_thumb_frame(
+        fast_probe_count = min(
+            len(timestamps),
+            max(1, int(os.getenv("VIDEO_INFO_THUMB_FAST_PROBE_COUNT", "2"))),
+        )
+
+        sampled: list[tuple[Optional[av.VideoFrame], float]] = [
+            (None, ts) for ts in timestamps
+        ]
+
+        use_fast_seek = self._set_thumb_skip_frame_mode(stream, "NONKEY")
+        if use_fast_seek:
+            fast_failures = 0
+            for idx in range(fast_probe_count):
+                sampled[idx] = self._seek_first_thumb_frame(
+                    container=container,
+                    stream=stream,
+                    timestamp=timestamps[idx],
+                    max_probe_packets=max_probe_packets,
+                )
+                if sampled[idx][0] is None:
+                    fast_failures += 1
+
+            if fast_failures >= fast_probe_count:
+                use_fast_seek = False
+            else:
+                for idx in range(fast_probe_count, len(timestamps)):
+                    sampled[idx] = self._seek_first_thumb_frame(
+                        container=container,
+                        stream=stream,
+                        timestamp=timestamps[idx],
+                        max_probe_packets=max_probe_packets,
+                    )
+
+        self._set_thumb_skip_frame_mode(stream, "DEFAULT")
+
+        if not use_fast_seek:
+            return [
+                self._seek_first_thumb_frame(
+                    container=container,
+                    stream=stream,
+                    timestamp=ts,
+                    max_probe_packets=max_probe_packets,
+                )
+                for ts in timestamps
+            ]
+
+        for idx, (frame, _) in enumerate(sampled):
+            if frame is not None:
+                continue
+            sampled[idx] = self._seek_first_thumb_frame(
                 container=container,
                 stream=stream,
-                timestamp=ts,
+                timestamp=timestamps[idx],
                 max_probe_packets=max_probe_packets,
             )
-            for ts in timestamps
-        ]
+
+        return sampled
+
+    @staticmethod
+    def _set_thumb_skip_frame_mode(
+        stream: av.video.stream.VideoStream,
+        mode: str,
+    ) -> bool:
+        try:
+            stream.codec_context.skip_frame = mode
+        except Exception:
+            return False
+        return True
 
     def _seek_first_thumb_frame(
         self,
