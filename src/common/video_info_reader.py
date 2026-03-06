@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from PIL import Image as PILImage
 
 _CACHE_MISS = object()
-_READ_INFO_CACHE_VERSION = 1
+_READ_INFO_CACHE_VERSION = 2
 _THUMB_CACHE_VERSION = 10
 _CACHE_MAX_SIZE_MB = max(1, int(os.getenv("VIDEO_INFO_CACHE_MAX_SIZE_MB", "500")))
 _CACHE_EXPIRE_SECONDS = max(
@@ -380,9 +380,16 @@ class VideoInfoReader:
 
                 logger.debug(f"实际采集帧数: {len(frames)}/{plan['num_frames']}")
                 for frame in frames:
-                    self._feed(frame)
+                    gray = self._prepare_detect_gray(frame)
+                    self._sampled_grays.append(gray)
 
-                detected_crop = self._run_detection()
+                if not self._has_black_border_in_samples():
+                    logger.debug("黑边预检未命中，跳过完整边框检测")
+                    detected_crop = None
+                else:
+                    for gray in self._sampled_grays:
+                        self._accumulate_motion_from_gray(gray)
+                    detected_crop = self._run_detection()
 
         return VideoInfo(
             width=width,
@@ -934,19 +941,23 @@ class VideoInfoReader:
     # ======================== 帧采集与状态管理 ========================
 
     def _feed(self, frame: av.VideoFrame) -> None:
+        gray = self._prepare_detect_gray(frame)
+        self._sampled_grays.append(gray)
+        self._accumulate_motion_from_gray(gray)
+
+    def _prepare_detect_gray(self, frame: av.VideoFrame) -> np.ndarray:
         if self._original_size is None:
             self._original_size = (frame.width, frame.height)
             self._compute_detect_size()
 
         dw, dh = self._detect_size
         small = frame.reformat(width=dw, height=dh)
-        gray = small.to_ndarray(format="gray").astype(np.float32)
+        return small.to_ndarray(format="gray").astype(np.float32)
 
+    def _accumulate_motion_from_gray(self, gray: np.ndarray) -> None:
+        dh, dw = gray.shape
         if self._accumulated is None:
             self._accumulated = np.zeros((dh, dw), dtype=np.uint8)
-
-        # 缓存灰度帧供空域分析
-        self._sampled_grays.append(gray)
 
         if self._prev_gray is not None:
             diff = np.abs(gray - self._prev_gray)
@@ -980,6 +991,66 @@ class VideoInfoReader:
                         self._accumulated[t:b, le:ri] = 255
 
         self._prev_gray = gray
+
+    def _has_black_border_in_samples(self) -> bool:
+        if not self._sampled_grays:
+            return False
+
+        hit_count = 0
+        min_hits = 1 if len(self._sampled_grays) <= 3 else 2
+        for gray in self._sampled_grays:
+            if self._has_black_border(gray):
+                hit_count += 1
+                if hit_count >= min_hits:
+                    return True
+        return False
+
+    def _has_black_border(self, gray: np.ndarray) -> bool:
+        height, width = gray.shape
+        border_width = max(2, int(round(min(height, width) * 0.02)))
+        border_width = min(border_width, max(2, min(height, width) // 8))
+
+        top_edge = gray[:border_width, :]
+        bottom_edge = gray[-border_width:, :]
+        left_edge = gray[:, :border_width]
+        right_edge = gray[:, -border_width:]
+        edge_p50 = np.array(
+            [
+                float(np.percentile(top_edge, 50)),
+                float(np.percentile(bottom_edge, 50)),
+                float(np.percentile(left_edge, 50)),
+                float(np.percentile(right_edge, 50)),
+            ],
+            dtype=np.float32,
+        )
+        edge_p35 = np.array(
+            [
+                float(np.percentile(top_edge, 35)),
+                float(np.percentile(bottom_edge, 35)),
+                float(np.percentile(left_edge, 35)),
+                float(np.percentile(right_edge, 35)),
+            ],
+            dtype=np.float32,
+        )
+
+        permissive_threshold = self.spatial_edge_threshold + 10.0
+
+        if not np.any(edge_p35 < permissive_threshold):
+            return False
+
+        cy0, cy1 = height // 4, max(height // 4 + 1, (height * 3) // 4)
+        cx0, cx1 = width // 4, max(width // 4 + 1, (width * 3) // 4)
+        center = gray[cy0:cy1, cx0:cx1]
+        center_mean = float(np.mean(center)) if center.size else float(np.mean(gray))
+        darkest_edge = float(np.min(edge_p35))
+        dark_edge_count = int(np.sum(edge_p50 < self.spatial_edge_threshold))
+        suspicious_edge_count = int(np.sum(edge_p35 < permissive_threshold))
+
+        return (
+            dark_edge_count >= 1
+            or suspicious_edge_count >= 2
+            or center_mean >= darkest_edge + 6.0
+        )
 
     def _reset(self) -> None:
         self._prev_gray = None
