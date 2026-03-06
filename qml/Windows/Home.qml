@@ -396,8 +396,34 @@ Item {
                                         ComboBox {
                                             id: videoProcessMode
                                             Layout.fillWidth: true
-                                            model: ["速度", "均衡", "质量"]
+                                            textRole: "text"
+                                            model: [
+                                                {
+                                                    text: "速度",
+                                                    tooltip: "比均衡快2~3倍,但体积增大20%~40%，画质略微损失"
+                                                },
+                                                {
+                                                    text: "均衡",
+                                                    tooltip: "速度，体积，大小的均衡选择"
+                                                },
+                                                {
+                                                    text: "质量",
+                                                    tooltip: "比均衡慢 1~2 倍，体积减少 20%~40%"
+                                                }
+                                            ]
                                             currentIndex: 1
+                                            delegate: ItemDelegate {
+                                                required property var modelData
+
+                                                width: videoProcessMode.width
+                                                text: modelData.text
+                                                highlighted: videoProcessMode.highlightedIndex === index
+                                                hoverEnabled: true
+
+                                                ToolTip.visible: hovered
+                                                ToolTip.delay: 0
+                                                ToolTip.text: modelData.tooltip
+                                            }
                                             HandCursor {}
                                         }
                                     }

@@ -20,6 +20,7 @@ Item {
     property var selectedIndices: ({})
     property int selectionVersion: 0
     property int anchorIndex: -1
+    readonly property string usageToolTipText: "鼠标拖放视频到此处添加视频\n快捷键说明：\n1. ctrl + A 全选\n2. ctrl + D, delete, backspace 删除\n3. ctrl + 鼠标左键 单选\n4. shift + 鼠标左键 连续选择\n\n长按单个视频进行拖拽排序\n\n右键可以智能排序以及展开更多操作"
 
     // ── 多选辅助函数 ──
     function isIndexSelected(idx) {
@@ -295,6 +296,14 @@ Item {
         color: "#ffffff"
         radius: 8
         focus: true
+
+        HoverHandler {
+            id: containerHover
+        }
+
+        ToolTip.visible: containerHover.hovered && videoModel.count === 0
+        ToolTip.delay: 200
+        ToolTip.text: root.usageToolTipText
 
         Keys.onPressed: function(event) {
             if (event.key === Qt.Key_A && (event.modifiers & Qt.ControlModifier)) {
