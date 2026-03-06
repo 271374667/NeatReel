@@ -183,7 +183,7 @@ Item {
                     font.weight: Font.Normal
                     color: root.valueColor
                     elide: Text.ElideMiddle
-                    width: parent.parent ? parent.parent.width : implicitWidth
+                    width: parent.width
                     maximumLineCount: 1
                     renderType: Text.NativeRendering
                 }
@@ -237,7 +237,7 @@ Item {
                     font.weight: Font.Normal
                     color: root.valueColor
                     elide: Text.ElideRight
-                    width: parent.parent ? parent.parent.width : implicitWidth
+                    width: parent.width
                     maximumLineCount: 1
                     renderType: Text.NativeRendering
                 }
@@ -264,7 +264,7 @@ Item {
                     font.weight: Font.DemiBold
                     color: root.accentColor
                     elide: Text.ElideRight
-                    width: parent.parent ? parent.parent.width : implicitWidth
+                    width: parent.width
                     maximumLineCount: 1
                     renderType: Text.NativeRendering
                 }
