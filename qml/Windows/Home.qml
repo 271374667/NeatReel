@@ -478,7 +478,7 @@ Item {
             var processMode = videoProcessMode.currentIndex
             var isLandscape = landscapeRadio.checked
             var coverPath = coverSelecter.hasCover ? coverSelecter.coverSource.toString() : ""
-            homeService.onStartProcessing(processMode, isLandscape, coverPath, items)
+            processingService.startMerge(processMode, isLandscape, coverPath, items)
             root.startProcessing()
         }
         anchors.right: parent.right

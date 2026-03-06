@@ -44,8 +44,12 @@ Window {
             anchors.fill: parent
             visible: root.onProcessingPage
 
-            onCancelRequested: root.onProcessingPage = false
-            onContinueRequested: root.onProcessingPage = false
+            onCancelRequested: processingService.onCancel()
+            onContinueRequested: {
+                processingService.reset()
+                root.onProcessingPage = false
+            }
+            onOpenOutputDir: processingService.onOpenOutputDir()
         }
     }
 }

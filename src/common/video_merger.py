@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from pathlib import Path
+from time import monotonic
 from typing import Sequence
 from collections import Counter
 from enum import Enum
@@ -12,9 +13,10 @@ import av
 import numpy as np
 from PIL import Image
 from loguru import logger
+from PySide6.QtGui import QImage
 
-from src.progress_reporter import ProgressReporter
 from src.common.video_info_reader import VideoInfoReader, CropResult
+from src.service.merge_signals import MergeCancelled, get_merge_signals
 from dataclasses import dataclass
 
 logger.remove()
@@ -52,6 +54,14 @@ class VideoProcessMode(Enum):
     SPEED = 2
 
 
+def _frame_to_qimage(pil_img) -> QImage:
+    """PIL Image -> QImage for display frame emission."""
+    pil_img = pil_img.convert("RGBA")
+    data = pil_img.tobytes("raw", "RGBA")
+    qimg = QImage(data, pil_img.width, pil_img.height, QImage.Format.Format_RGBA8888)
+    return qimg.copy()
+
+
 class VideoMerger:
     # 各处理模式的编码器配置
     # 多线程不影响画质，所有级别均启用
@@ -79,9 +89,6 @@ class VideoMerger:
         },
     }
 
-    def __init__(self) -> None:
-        self.progress_reporter = ProgressReporter(enable_tqdm=True)
-
     def merge(
         self,
         input_files: Sequence[InputVideoInfo],
@@ -107,6 +114,8 @@ class VideoMerger:
             raise TypeError("target_fps 类型必须是 int")
         if target_fps != -1 and target_fps <= 0:
             raise ValueError("target_fps 必须为 -1 或正整数")
+
+        signals = get_merge_signals()
 
         # ===== 预处理: 收集裁剪、旋转信息、有效尺寸、帧率和音频采样率 =====
         preprocessed: list[tuple[CropResult | None, Rotation]] = []
@@ -258,11 +267,16 @@ class VideoMerger:
 
         video_pts_offset = 0
         audio_pts_offset = 0
-        reporter = self.progress_reporter
-        reporter.start_merge(total_files=len(input_files))
+        last_progress_emit = 0.0
+        last_display_emit = 0.0
+
+        signals.mergeStarted.emit(len(input_files), effective_fps)
 
         try:
             for file_index, video_info in enumerate(input_files):
+                if signals.is_cancelled():
+                    raise MergeCancelled("已取消")
+
                 input_file = video_info.file_path
                 crop_result, effective_rotation = preprocessed[file_index]
 
@@ -302,12 +316,10 @@ class VideoMerger:
                             max(1, round(duration_seconds * stream_fps))
                         )
 
-                reporter.start_file(
-                    file_index=file_index + 1,
-                    file_path=input_file,
-                    total_frames=(
-                        estimated_total_frames if estimated_total_frames > 0 else None
-                    ),
+                signals.fileStarted.emit(
+                    file_index + 1,
+                    input_file.name,
+                    estimated_total_frames if estimated_total_frames > 0 else 0,
                 )
 
                 filter_graph = self._build_filter_graph(
@@ -354,16 +366,39 @@ class VideoMerger:
                 # 单遍同时 demux 视频和音频，交错编码并 mux
                 demux_streams = [in_video] + ([in_audio] if in_audio else [])
                 for packet in input_container.demux(*demux_streams):
+                    if signals.is_cancelled():
+                        raise MergeCancelled("已取消")
+
                     if packet.stream.type == "video":
                         for frame in packet.decode():
-                            reporter.update_frame(1)
                             filter_graph["src"].push(frame)
                             while True:
                                 try:
                                     filtered_frame = filter_graph["sink"].pull()
                                 except (BlockingIOError, EOFError):
                                     break
+
+                                # Emit display frame (throttled to 300ms)
+                                now = monotonic()
+                                if now - last_display_emit >= 0.3:
+                                    last_display_emit = now
+                                    try:
+                                        pil_img = filtered_frame.to_image()
+                                        qimg = _frame_to_qimage(pil_img)
+                                        signals.displayFrameReady.emit(qimg)
+                                    except Exception:
+                                        pass
+
                                 _encode_video_frame(filtered_frame)
+
+                            # Emit progress (throttled to 300ms)
+                            now = monotonic()
+                            if now - last_progress_emit >= 0.3:
+                                last_progress_emit = now
+                                signals.frameProcessed.emit(
+                                    segment_video_frame_count,
+                                    estimated_total_frames if estimated_total_frames > 0 else 0,
+                                )
 
                     elif packet.stream.type == "audio":
                         for frame in packet.decode():
@@ -373,6 +408,8 @@ class VideoMerger:
                 # 刷新视频滤镜图中缓冲的剩余帧
                 filter_graph["src"].push(None)
                 while True:
+                    if signals.is_cancelled():
+                        raise MergeCancelled("已取消")
                     try:
                         filtered_frame = filter_graph["sink"].pull()
                     except (BlockingIOError, EOFError):
@@ -410,7 +447,12 @@ class VideoMerger:
                 )
 
                 input_container.close()
-                reporter.finish_file()
+                signals.fileFinished.emit(file_index + 1)
+                # Final progress update for this file
+                signals.frameProcessed.emit(
+                    segment_video_frame_count,
+                    estimated_total_frames if estimated_total_frames > 0 else 0,
+                )
                 logger.info(
                     f"完成，video offset -> {video_pts_offset}, "
                     f"audio offset -> {audio_pts_offset}"
@@ -425,10 +467,15 @@ class VideoMerger:
                 out_packet.stream = out_audio
                 output_container.mux(out_packet)
 
-            reporter.finish_merge()
+            signals.mergeFinished.emit()
             logger.info(f"完成! 输出文件: {output_file}")
+        except MergeCancelled:
+            signals.mergeError.emit("已取消")
+            logger.info("合并已取消")
+        except Exception as exc:
+            signals.mergeError.emit(str(exc))
+            logger.exception("合并出错")
         finally:
-            reporter.close()
             output_container.close()
 
     @staticmethod
@@ -482,7 +529,7 @@ class VideoMerger:
         target_fps: int | None = None,
         scale_flags: str = "bicubic",
     ) -> dict[str, object]:
-        """构建滤镜图: 裁剪 → 旋转 → 帧率转换 → 缩放+填充到目标尺寸。"""
+        """构建滤镜图: 裁剪 -> 旋转 -> 帧率转换 -> 缩放+填充到目标尺寸。"""
         graph = av.filter.Graph()
         src = graph.add_buffer(template=in_video)
         last = src
@@ -551,7 +598,6 @@ if __name__ == "__main__":
     merger.merge(
         process_mode=VideoProcessMode.SPEED,
         input_files=[
-            # InputVideoInfo(file_path=Path(r"C:\Users\PythonImporter\Videos\Captures\1.mp4"), rotation=Rotation.ROTATE_90),
             InputVideoInfo(
                 file_path=Path(
                     r"E:\load\python\Project\VideoFusion\测试\dy\b7bb97e21600b07f66c21e7932cb7550.mp4"

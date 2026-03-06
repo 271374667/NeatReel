@@ -6,6 +6,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 
 from src.service.home_service import HomeService
 from src.service.image_provider import ThumbnailImageProvider
+from src.service.processing_service import ProcessingService
 
 
 def main() -> None:
@@ -17,9 +18,12 @@ def main() -> None:
     image_provider = ThumbnailImageProvider()
     engine.addImageProvider("thumbnail", image_provider)
 
-    # home service -> QML context property
+    # services -> QML context properties
     home_service = HomeService(image_provider)
     engine.rootContext().setContextProperty("homeService", home_service)
+
+    processing_service = ProcessingService(image_provider)
+    engine.rootContext().setContextProperty("processingService", processing_service)
 
     qml_path = Path(__file__).parent / "qml" / "App.qml"
     engine.load(qml_path)

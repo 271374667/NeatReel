@@ -1,0 +1,363 @@
+from __future__ import annotations
+
+import subprocess
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from time import monotonic
+
+from loguru import logger
+from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
+from PySide6.QtGui import QImage
+
+from src.common.video_info_reader import VideoInfoReader
+from src.common.video_merger import (
+    InputVideoInfo,
+    Orientation,
+    Rotation,
+    VideoMerger,
+    VideoProcessMode,
+)
+from src.service.image_provider import ThumbnailImageProvider
+from src.service.merge_signals import get_merge_signals
+
+
+# ── helpers ──────────────────────────────────────────────────────
+_ROTATION_MAP = {
+    0: Rotation.ROTATE_0,
+    90: Rotation.ROTATE_90,
+    180: Rotation.ROTATE_180,
+    270: Rotation.ROTATE_270,
+}
+
+_PROCESS_MODE_MAP = {
+    0: VideoProcessMode.SPEED,
+    1: VideoProcessMode.BALANCED,
+    2: VideoProcessMode.QUALITY,
+}
+
+
+def _format_elapsed(seconds: float) -> str:
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def _format_remaining(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{seconds} 秒"
+    if seconds < 3600:
+        m = seconds // 60
+        s = seconds % 60
+        return f"{m} 分 {s} 秒"
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    return f"{h} 小时 {m} 分"
+
+
+def _pil_to_qimage(pil_image) -> QImage:
+    pil_image = pil_image.convert("RGBA")
+    data = pil_image.tobytes("raw", "RGBA")
+    qimg = QImage(
+        data, pil_image.width, pil_image.height, QImage.Format.Format_RGBA8888
+    )
+    return qimg.copy()
+
+
+# ── merge worker ─────────────────────────────────────────────────
+class _MergeWorker(QThread):
+    """Background thread: parallel read_info + merge."""
+
+    def __init__(
+        self,
+        video_items: list[dict],
+        process_mode: VideoProcessMode,
+        orientation: Orientation,
+        cover_path: Path | None,
+        output_path: Path,
+    ):
+        super().__init__()
+        self._video_items = video_items
+        self._process_mode = process_mode
+        self._orientation = orientation
+        self._cover_path = cover_path
+        self._output_path = output_path
+
+    def run(self) -> None:
+        signals = get_merge_signals()
+        try:
+            def _read_single(item: dict):
+                reader = VideoInfoReader()
+                path = Path(item["filePath"])
+                info = reader.read_info(path)
+                return item, info
+
+            with ThreadPoolExecutor() as pool:
+                results = list(pool.map(_read_single, self._video_items))
+
+            input_files: list[InputVideoInfo] = []
+            for item, info in results:
+                angle = int(item.get("rotation", 0)) % 360
+                rotation = _ROTATION_MAP.get(angle, Rotation.ROTATE_0)
+                input_files.append(
+                    InputVideoInfo(
+                        file_path=Path(item["filePath"]),
+                        crop_result=info.crop_result,
+                        rotation=rotation,
+                    )
+                )
+
+            merger = VideoMerger()
+            merger.merge(
+                input_files=input_files,
+                output_file=self._output_path,
+                process_mode=self._process_mode,
+                orientation=self._orientation,
+                cover_image_path=self._cover_path,
+            )
+        except Exception:
+            # All errors/cancellations are already emitted by VideoMerger
+            # via MergeSignals. If read_info fails before merge(), emit here.
+            if not signals.is_cancelled():
+                import traceback
+                signals.mergeError.emit(traceback.format_exc())
+
+
+# ── ProcessingService (exposed to QML as context property) ───────
+class ProcessingService(QObject):
+    # signals -> QML
+    totalProgressChanged = Signal(float)
+    totalCurrentChanged = Signal(int)
+    totalCountChanged = Signal(int)
+    stageProgressChanged = Signal(float)
+    stageNameChanged = Signal(str)
+    elapsedTimeChanged = Signal(str)
+    processingSpeedChanged = Signal(float)
+    estimatedRemainingChanged = Signal(str)
+    processingStatusChanged = Signal(int)   # 0=processing, 1=done, 2=error
+    displayStateChanged = Signal(int)
+    frameSourceChanged = Signal(str)
+
+    def __init__(self, image_provider: ThumbnailImageProvider, parent: QObject | None = None):
+        super().__init__(parent)
+        self._image_provider = image_provider
+        self._worker: _MergeWorker | None = None
+        self._output_path = Path("output.mp4")
+
+        # Elapsed time
+        self._elapsed_timer = QTimer(self)
+        self._elapsed_timer.setInterval(1000)
+        self._elapsed_timer.timeout.connect(self._update_elapsed)
+        self._start_time = 0.0
+
+        # State tracking
+        self._total_files = 0
+        self._completed_files = 0
+        self._effective_fps = 30
+        self._current_frames = 0
+        self._current_total_frames = 0
+        self._frame_counter = 0
+
+        # Speed tracking (sliding window)
+        self._speed_samples: deque[tuple[float, int]] = deque(maxlen=30)
+        self._cumulative_frames = 0
+
+        # Connect MergeSignals
+        signals = get_merge_signals()
+        signals.mergeStarted.connect(self._on_merge_started)
+        signals.fileStarted.connect(self._on_file_started)
+        signals.frameProcessed.connect(self._on_frame_processed)
+        signals.fileFinished.connect(self._on_file_finished)
+        signals.mergeFinished.connect(self._on_merge_finished)
+        signals.mergeError.connect(self._on_merge_error)
+        signals.displayFrameReady.connect(self._on_display_frame)
+
+    # ── slots (called from QML) ──────────────────────────────────
+
+    @Slot(int, bool, str, "QVariantList")
+    def startMerge(
+        self,
+        process_mode_index: int,
+        is_landscape: bool,
+        cover_path: str,
+        video_items: list,
+    ) -> None:
+        process_mode = _PROCESS_MODE_MAP.get(process_mode_index, VideoProcessMode.BALANCED)
+        orientation = Orientation.HORIZONTAL if is_landscape else Orientation.VERTICAL
+
+        cover: Path | None = None
+        if cover_path:
+            raw = cover_path
+            if raw.startswith("file:///"):
+                raw = raw[8:]
+            cover = Path(raw)
+
+        self._output_path = Path("output.mp4")
+
+        # Reset state
+        self._total_files = 0
+        self._completed_files = 0
+        self._current_frames = 0
+        self._current_total_frames = 0
+        self._cumulative_frames = 0
+        self._speed_samples.clear()
+        self._start_time = monotonic()
+
+        self.processingStatusChanged.emit(0)
+        self.totalProgressChanged.emit(0.0)
+        self.stageProgressChanged.emit(0.0)
+        self.stageNameChanged.emit("准备中")
+        self.elapsedTimeChanged.emit("00:00:00")
+        self.processingSpeedChanged.emit(0.0)
+        self.estimatedRemainingChanged.emit("")
+        self.displayStateChanged.emit(1)  # Loading
+
+        self._elapsed_timer.start()
+
+        get_merge_signals().reset()
+
+        self._worker = _MergeWorker(
+            video_items, process_mode, orientation, cover, self._output_path
+        )
+        self._worker.start()
+
+    @Slot()
+    def onCancel(self) -> None:
+        signals = get_merge_signals()
+        signals.request_cancel()
+
+    @Slot()
+    def onOpenOutputDir(self) -> None:
+        output_dir = self._output_path.parent.resolve()
+        try:
+            subprocess.Popen(["explorer", str(output_dir)])
+        except Exception:
+            logger.exception("Failed to open output directory")
+
+    @Slot()
+    def reset(self) -> None:
+        self._elapsed_timer.stop()
+        self._speed_samples.clear()
+
+    # ── MergeSignals handlers ────────────────────────────────────
+
+    def _on_merge_started(self, total_files: int, effective_fps: int) -> None:
+        self._total_files = total_files
+        self._effective_fps = max(1, effective_fps)
+        self._completed_files = 0
+        self._cumulative_frames = 0
+        self._speed_samples.clear()
+        self._start_time = monotonic()
+
+        self.totalCountChanged.emit(total_files)
+        self.totalCurrentChanged.emit(0)
+        self.displayStateChanged.emit(2)  # Normal (show frame)
+
+    def _on_file_started(self, file_index: int, file_name: str, total_frames: int) -> None:
+        self._current_frames = 0
+        self._current_total_frames = max(1, total_frames)
+        self._speed_samples.clear()
+        self._cumulative_frames = 0
+
+        self.totalCurrentChanged.emit(file_index)
+        self.stageNameChanged.emit(f"处理文件 {file_index}/{self._total_files}: {file_name}")
+        self.stageProgressChanged.emit(0.0)
+
+    def _on_frame_processed(self, current_frames: int, total_frames: int) -> None:
+        self._current_frames = current_frames
+        if total_frames > 0:
+            self._current_total_frames = total_frames
+
+        # Speed tracking
+        now = monotonic()
+        self._cumulative_frames = current_frames
+        self._speed_samples.append((now, current_frames))
+
+        # Stage progress
+        stage_progress = 0.0
+        if self._current_total_frames > 0:
+            stage_progress = min(1.0, current_frames / self._current_total_frames)
+        self.stageProgressChanged.emit(stage_progress)
+
+        # Total progress
+        if self._total_files > 0:
+            total = (self._completed_files + stage_progress) / self._total_files
+            self.totalProgressChanged.emit(min(1.0, total))
+
+        # Speed
+        speed = self._compute_speed()
+        if speed > 0:
+            self.processingSpeedChanged.emit(speed)
+
+        # Remaining time
+        remaining = self._compute_remaining()
+        if remaining:
+            self.estimatedRemainingChanged.emit(remaining)
+
+    def _on_file_finished(self, file_index: int) -> None:
+        self._completed_files = file_index
+        self.stageProgressChanged.emit(1.0)
+
+        if self._total_files > 0:
+            total = self._completed_files / self._total_files
+            self.totalProgressChanged.emit(min(1.0, total))
+
+    def _on_merge_finished(self) -> None:
+        self._elapsed_timer.stop()
+        self.processingStatusChanged.emit(1)  # Done
+        self.totalProgressChanged.emit(1.0)
+        self.stageProgressChanged.emit(1.0)
+        self.stageNameChanged.emit("完成")
+        self.estimatedRemainingChanged.emit("")
+
+    def _on_merge_error(self, message: str) -> None:
+        self._elapsed_timer.stop()
+        self.processingStatusChanged.emit(2)  # Error
+        if message == "已取消":
+            self.stageNameChanged.emit("已取消")
+        else:
+            self.stageNameChanged.emit("错误")
+            logger.error(f"Merge error: {message}")
+
+    def _on_display_frame(self, qimage: QImage) -> None:
+        self._frame_counter += 1
+        image_id = f"proc_{self._frame_counter}"
+        self._image_provider.set_image(image_id, qimage)
+        self.frameSourceChanged.emit(f"image://thumbnail/{image_id}")
+
+    # ── internal ─────────────────────────────────────────────────
+
+    def _update_elapsed(self) -> None:
+        elapsed = monotonic() - self._start_time
+        self.elapsedTimeChanged.emit(_format_elapsed(elapsed))
+
+    def _compute_speed(self) -> float:
+        if len(self._speed_samples) < 2 or self._effective_fps <= 0:
+            return 0.0
+
+        oldest_t, oldest_f = self._speed_samples[0]
+        newest_t, newest_f = self._speed_samples[-1]
+        dt = newest_t - oldest_t
+        if dt < 0.5:
+            return 0.0
+
+        frames_per_second = (newest_f - oldest_f) / dt
+        return frames_per_second / self._effective_fps
+
+    def _compute_remaining(self) -> str:
+        elapsed = monotonic() - self._start_time
+        if self._total_files <= 0 or elapsed < 1.0:
+            return ""
+
+        stage_progress = 0.0
+        if self._current_total_frames > 0:
+            stage_progress = min(1.0, self._current_frames / self._current_total_frames)
+
+        overall = (self._completed_files + stage_progress) / self._total_files
+        if overall <= 0.01:
+            return ""
+
+        remaining_seconds = elapsed * (1.0 - overall) / overall
+        return _format_remaining(remaining_seconds)

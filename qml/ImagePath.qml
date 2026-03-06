@@ -17,4 +17,5 @@ QtObject {
     readonly property string waiting: imageDirectory + "/Waiting.svg"
     readonly property string videoList: imageDirectory + "/VideoList.svg"
     readonly property string movie: imageDirectory + "/Movie.svg"
+    readonly property string add: imageDirectory + "/Add.svg"
 }

@@ -26,6 +26,28 @@ Item {
     signal continueRequested()
     signal openOutputDir()
 
+    // Smooth speed animation with Bezier curve
+    Behavior on processingSpeed {
+        NumberAnimation { duration: 800; easing.type: Easing.InOutCubic }
+    }
+
+    // ── backend signal connections ──
+    Connections {
+        target: processingService
+
+        function onTotalProgressChanged(v) { root.totalProgress = v }
+        function onTotalCurrentChanged(v) { root.totalCurrent = v }
+        function onTotalCountChanged(v) { root.totalCount = v }
+        function onStageProgressChanged(v) { root.stageProgress = v }
+        function onStageNameChanged(v) { root.stageName = v }
+        function onElapsedTimeChanged(v) { root.elapsedTime = v }
+        function onProcessingSpeedChanged(v) { root.processingSpeed = v }
+        function onEstimatedRemainingChanged(v) { root.estimatedRemaining = v }
+        function onProcessingStatusChanged(v) { root.processingStatus = v }
+        function onDisplayStateChanged(v) { root.displayState = v }
+        function onFrameSourceChanged(v) { root.frameSource = v }
+    }
+
     readonly property real tp: Math.max(0.0, Math.min(1.0, totalProgress))
     readonly property real sp: Math.max(0.0, Math.min(1.0, stageProgress))
     readonly property real displayTotalProgress: processingStatus === 1 ? 1.0 : tp
@@ -46,7 +68,7 @@ Item {
     component StatCard: Rectangle {
         id: statCard
         property string title: ""
-        property string value: ""
+        property string value: ""              
         property string note: ""
         property color valueColor: "#111111"
         property bool mono: false
