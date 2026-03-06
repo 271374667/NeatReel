@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 _CACHE_MISS = object()
 _READ_INFO_CACHE_VERSION = 1
-_THUMB_CACHE_VERSION = 8
+_THUMB_CACHE_VERSION = 9
 _CACHE_MAX_SIZE_MB = max(1, int(os.getenv("VIDEO_INFO_CACHE_MAX_SIZE_MB", "500")))
 _CACHE_EXPIRE_SECONDS = max(
     60, int(os.getenv("VIDEO_INFO_CACHE_EXPIRE_SECONDS", str(24 * 60 * 60)))
@@ -474,25 +474,8 @@ class VideoInfoReader:
             stream = container.streams.video[0]
             stream.thread_type = "AUTO"
 
-            # 尽量用低成本路径解码，提升缩略图生成速度
-            try:
-                stream.codec_context.skip_frame = "NONKEY"
-            except Exception:
-                pass
-            try:
-                stream.codec_context.skip_loop_filter = "ALL"
-            except Exception:
-                pass
-            try:
-                stream.codec_context.skip_idct = "ALL"
-            except Exception:
-                pass
-            try:
-                max_lowres = int(getattr(stream.codec_context, "max_lowres", 0) or 0)
-                if max_lowres > 0:
-                    stream.codec_context.lowres = 1
-            except Exception:
-                pass
+            # `skip_frame=NONKEY` 在部分视频上会导致 seek 后完全拿不到可解码帧，
+            # 最终整张缩略图退化成黑色占位图，因此这里保持常规解码路径。
 
             fps_hint = float(stream.average_rate or stream.base_rate or 30.0)
             duration = self._resolve_video_duration(container, stream)
