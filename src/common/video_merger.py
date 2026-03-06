@@ -97,19 +97,31 @@ class VideoMerger:
     # SPEED: 最高速度
     _MODE_CONFIGS: dict[VideoProcessMode, dict] = {
         VideoProcessMode.QUALITY: {
-            "codec_options": {"preset": "slow", "bf": "0", "crf": "18"},
+            "codec_options": {
+                "preset": "slow",
+                "crf": "23",
+                "qcomp": "0.5",
+                "psy-rd": "0.3:0",
+                "aq-mode": "2",
+                "aq-strength": "0.8",
+            },
+            "audio_bitrate": 256_000,
+            "container_options": {"movflags": "+faststart"},
             "scale_flags": "bicubic",
         },
         VideoProcessMode.BALANCED: {
             "codec_options": {"preset": "medium", "bf": "0", "crf": "20"},
+            "audio_bitrate": 192_000,
+            "container_options": {"movflags": "+faststart"},
             "scale_flags": "bicubic",
         },
         VideoProcessMode.SPEED: {
             "codec_options": {
-                "preset": "ultrafast",
-                "bf": "0",
-                "crf": "18",
+                "preset": "veryfast",
+                "crf": "20",
             },
+            "audio_bitrate": 160_000,
+            "container_options": {"movflags": "+faststart"},
             "scale_flags": "bilinear",
         },
     }
@@ -262,15 +274,18 @@ class VideoMerger:
 
         # ===== 处理视频 =====
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        output_container = av.open(str(output_file), mode="w")
+        mode_cfg = self._MODE_CONFIGS[process_mode]
+        output_container = av.open(
+            str(output_file),
+            mode="w",
+            options=mode_cfg.get("container_options"),
+        )
 
         audio_time_base = Fraction(1, target_audio_rate)
 
         # 在 mux 任何 packet 之前，先把视频和音频两个输出流都注册好，
         # 否则 MP4 muxer 在首次 mux() 时写入 header，
         # 遗漏后续添加的 stream，导致输出文件损坏。
-        mode_cfg = self._MODE_CONFIGS[process_mode]
-
         out_video = output_container.add_stream("libx264", rate=target_fps_fraction)
         out_video.width = target_width
         out_video.height = target_height
@@ -281,6 +296,9 @@ class VideoMerger:
 
         out_audio = output_container.add_stream("aac", rate=target_audio_rate)
         out_audio.time_base = audio_time_base
+        audio_bitrate = mode_cfg.get("audio_bitrate")
+        if audio_bitrate:
+            out_audio.bit_rate = int(audio_bitrate)
 
         # ===== 封面流 =====
         if cover_image_path is not None:
