@@ -110,7 +110,11 @@ class VideoMerger:
             "scale_flags": "bicubic",
         },
         VideoProcessMode.BALANCED: {
-            "codec_options": {"preset": "medium", "bf": "0", "crf": "20"},
+            "codec_options": {
+                "preset": "fast",
+                "crf": "23",
+                "aq-mode": "1",
+            },
             "audio_bitrate": 192_000,
             "container_options": {"movflags": "+faststart"},
             "scale_flags": "bicubic",
