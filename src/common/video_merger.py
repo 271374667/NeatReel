@@ -12,6 +12,7 @@ import sys
 import av
 import numpy as np
 from PIL import Image
+from av.video.reformatter import Interpolation
 from loguru import logger
 from PySide6.QtGui import QImage
 
@@ -59,11 +60,33 @@ class VideoProcessMode(Enum):
     SPEED = 2
 
 
-def _frame_to_qimage(pil_img) -> QImage:
-    """PIL Image -> QImage for display frame emission."""
-    pil_img = pil_img.convert("RGBA")
-    data = pil_img.tobytes("raw", "RGBA")
-    qimg = QImage(data, pil_img.width, pil_img.height, QImage.Format.Format_RGBA8888)
+_PREVIEW_MAX_EDGE = 320
+
+
+def _frame_to_qimage(frame: av.VideoFrame, max_edge: int = _PREVIEW_MAX_EDGE) -> QImage:
+    """VideoFrame -> low-res QImage for progress preview."""
+    src_w, src_h = frame.width, frame.height
+    if src_w <= 0 or src_h <= 0:
+        raise ValueError("预览帧尺寸非法")
+
+    scale = min(1.0, max_edge / max(src_w, src_h))
+    preview_w = max(1, int(round(src_w * scale)))
+    preview_h = max(1, int(round(src_h * scale)))
+
+    preview_frame = frame.reformat(
+        width=preview_w,
+        height=preview_h,
+        format="rgb24",
+        interpolation=Interpolation.FAST_BILINEAR,
+    )
+    rgb = preview_frame.to_ndarray()
+    qimg = QImage(
+        rgb.data,
+        preview_frame.width,
+        preview_frame.height,
+        rgb.strides[0],
+        QImage.Format.Format_RGB888,
+    )
     return qimg.copy()
 
 
@@ -87,7 +110,7 @@ class VideoMerger:
                 "bf": "0",
                 "crf": "18",
             },
-            "scale_flags": "bicubic",
+            "scale_flags": "bilinear",
         },
     }
 
@@ -406,8 +429,7 @@ class VideoMerger:
                                 if now - last_display_emit >= 0.3:
                                     last_display_emit = now
                                     try:
-                                        pil_img = filtered_frame.to_image()
-                                        qimg = _frame_to_qimage(pil_img)
+                                        qimg = _frame_to_qimage(filtered_frame)
                                         signals.displayFrameReady.emit(qimg)
                                     except Exception:
                                         pass
@@ -447,18 +469,29 @@ class VideoMerger:
                 if in_audio is None and segment_video_frame_count > 0:
                     silence_duration = segment_video_frame_count / effective_fps
                     silence_samples_needed = int(silence_duration * target_audio_rate)
-                    # 每次生成 1024 个采样的静音帧
-                    samples_per_frame = 1024
+                    samples_per_frame = max(
+                        1024, int(out_audio.codec_context.frame_size or 0)
+                    )
+                    silence_buffer = np.zeros((2, samples_per_frame), dtype="float32")
+                    full_silence_frames, silence_remainder = divmod(
+                        silence_samples_needed, samples_per_frame
+                    )
 
-                    while silence_samples_needed > 0:
-                        n = min(samples_per_frame, silence_samples_needed)
-                        silent_data = np.zeros((2, n), dtype="float32")
+                    for _ in range(full_silence_frames):
                         silent_frame = av.AudioFrame.from_ndarray(
-                            silent_data, format="fltp", layout="stereo"
+                            silence_buffer, format="fltp", layout="stereo"
                         )
                         silent_frame.rate = target_audio_rate
                         _encode_audio_frame(silent_frame)
-                        silence_samples_needed -= n
+
+                    if silence_remainder > 0:
+                        silent_frame = av.AudioFrame.from_ndarray(
+                            silence_buffer[:, :silence_remainder],
+                            format="fltp",
+                            layout="stereo",
+                        )
+                        silent_frame.rate = target_audio_rate
+                        _encode_audio_frame(silent_frame)
 
                 video_pts_offset += segment_video_frame_count
                 # 将 audio offset 同步到 video offset 的时间线，消除累积漂移
@@ -556,6 +589,8 @@ class VideoMerger:
         graph = av.filter.Graph()
         src = graph.add_buffer(template=in_video)
         last = src
+        current_width = int(in_video.width)
+        current_height = int(in_video.height)
 
         # 1. 裁剪
         if crop_result is not None:
@@ -565,16 +600,20 @@ class VideoMerger:
             )
             last.link_to(crop)
             last = crop
+            current_width = crop_result.width
+            current_height = crop_result.height
 
         # 2. 旋转
         if rotation == Rotation.ROTATE_90:
             transpose = graph.add("transpose", args="clock")
             last.link_to(transpose)
             last = transpose
+            current_width, current_height = current_height, current_width
         elif rotation == Rotation.ROTATE_270:
             transpose = graph.add("transpose", args="cclock")
             last.link_to(transpose)
             last = transpose
+            current_width, current_height = current_height, current_width
         elif rotation == Rotation.ROTATE_180:
             vflip = graph.add("vflip")
             last.link_to(vflip)
@@ -584,25 +623,41 @@ class VideoMerger:
             last = hflip
 
         # 3. 帧率转换
-        if target_fps is not None:
+        source_fps = float(in_video.average_rate or in_video.base_rate or in_video.rate or 0)
+        needs_fps_filter = (
+            target_fps is not None
+            and target_fps > 0
+            and not math.isclose(source_fps, target_fps, rel_tol=0.0, abs_tol=1e-3)
+        )
+        if needs_fps_filter:
             fps_filter = graph.add("fps", args=str(target_fps))
             last.link_to(fps_filter)
             last = fps_filter
 
         # 4. 缩放 + 填充到目标尺寸
-        scale = graph.add(
-            "scale",
-            args=f"{target_width}:{target_height}:force_original_aspect_ratio=decrease:flags={scale_flags}",
+        needs_scale = current_width != target_width or current_height != target_height
+        needs_pad = (
+            needs_scale
+            and current_width * target_height != current_height * target_width
         )
-        last.link_to(scale)
-        last = scale
+        if needs_scale:
+            scale = graph.add(
+                "scale",
+                args=(
+                    f"{target_width}:{target_height}:"
+                    f"force_original_aspect_ratio=decrease:flags={scale_flags}"
+                ),
+            )
+            last.link_to(scale)
+            last = scale
 
-        pad = graph.add(
-            "pad",
-            args=f"{target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black",
-        )
-        last.link_to(pad)
-        last = pad
+        if needs_pad:
+            pad = graph.add(
+                "pad",
+                args=f"{target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black",
+            )
+            last.link_to(pad)
+            last = pad
 
         # 显式指定像素格式，避免编码器隐式转换的额外开销
         fmt = graph.add("format", args="pix_fmts=yuv420p")
