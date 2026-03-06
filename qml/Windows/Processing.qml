@@ -46,6 +46,7 @@ Item {
         function onProcessingStatusChanged(v) { root.processingStatus = v }
         function onDisplayStateChanged(v) { root.displayState = v }
         function onFrameSourceChanged(v) { root.frameSource = v }
+        function onProjectIdChanged(v) { root.projectId = v }
     }
 
     readonly property real tp: Math.max(0.0, Math.min(1.0, totalProgress))
@@ -57,13 +58,6 @@ Item {
     readonly property color barColor: processingStatus === 1 ? "#107C10" : processingStatus === 2 ? "#C42B1C" : "#0078D4"
     readonly property string pctText: Math.round(displayTotalProgress * 100) + "%"
     readonly property string statusText: processingStatus === 1 ? "完成" : processingStatus === 2 ? "错误" : "进行中"
-
-    Component.onCompleted: {
-        var chars = "0123456789abcdef"
-        var result = ""
-        for (var i = 0; i < 8; i++) result += chars[Math.floor(Math.random() * chars.length)]
-        projectId = result
-    }
 
     component StatCard: Rectangle {
         id: statCard

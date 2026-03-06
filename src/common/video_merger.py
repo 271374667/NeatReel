@@ -64,7 +64,6 @@ def _frame_to_qimage(pil_img) -> QImage:
 
 class VideoMerger:
     # 各处理模式的编码器配置
-    # 多线程不影响画质，所有级别均启用
     # QUALITY: 最高画质
     # BALANCED: 均衡模式
     # SPEED: 最高速度
@@ -80,12 +79,10 @@ class VideoMerger:
         VideoProcessMode.SPEED: {
             "codec_options": {
                 "preset": "ultrafast",
-                "tune": "fastdecode",
                 "bf": "0",
-                "crf": "23",
-                "threads": "0",
+                "crf": "18",
             },
-            "scale_flags": "fast_bilinear",
+            "scale_flags": "bicubic",
         },
     }
 

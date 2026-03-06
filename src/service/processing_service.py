@@ -7,7 +7,7 @@ from pathlib import Path
 from time import monotonic
 
 from loguru import logger
-from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QThread, QTimer, QUuid, Signal, Slot
 from PySide6.QtGui import QImage
 
 from src.common.video_info_reader import VideoInfoReader
@@ -18,6 +18,7 @@ from src.common.video_merger import (
     VideoMerger,
     VideoProcessMode,
 )
+from src.core.paths import OUTPUT_DIR
 from src.service.image_provider import ThumbnailImageProvider
 from src.service.merge_signals import get_merge_signals
 
@@ -139,12 +140,14 @@ class ProcessingService(QObject):
     processingStatusChanged = Signal(int)   # 0=processing, 1=done, 2=error
     displayStateChanged = Signal(int)
     frameSourceChanged = Signal(str)
+    projectIdChanged = Signal(str)
 
     def __init__(self, image_provider: ThumbnailImageProvider, parent: QObject | None = None):
         super().__init__(parent)
         self._image_provider = image_provider
         self._worker: _MergeWorker | None = None
-        self._output_path = Path("output.mp4")
+        self._output_path = OUTPUT_DIR / "output.mp4"
+        self._project_id = ""
 
         # Elapsed time
         self._elapsed_timer = QTimer(self)
@@ -195,7 +198,9 @@ class ProcessingService(QObject):
                 raw = raw[8:]
             cover = Path(raw)
 
-        self._output_path = Path("output.mp4")
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        self._project_id = self._generate_project_id()
+        self._output_path = OUTPUT_DIR / f"{self._project_id}.mp4"
 
         # Reset state
         self._total_files = 0
@@ -214,6 +219,7 @@ class ProcessingService(QObject):
         self.processingSpeedChanged.emit(0.0)
         self.estimatedRemainingChanged.emit("")
         self.displayStateChanged.emit(1)  # Loading
+        self.projectIdChanged.emit(self._project_id)
 
         self._elapsed_timer.start()
 
@@ -362,3 +368,6 @@ class ProcessingService(QObject):
 
         remaining_seconds = elapsed * (1.0 - stage_progress) / stage_progress
         return _format_remaining(remaining_seconds)
+
+    def _generate_project_id(self) -> str:
+        return QUuid.createUuid().toString(QUuid.StringFormat.WithoutBraces).replace("-", "")[:8]
