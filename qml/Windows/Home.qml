@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.FluentWinUI3
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import "../"
 import "../Widgets"
@@ -21,6 +22,8 @@ Item {
     property bool showingOriginal: false
     property int previewDisplayState: DisplayScreen.State.Waiting
     property var currentCropRect: ({})
+    property string defaultOutputDirectory: homeService.defaultOutputDirectory
+    property string outputDirectory: defaultOutputDirectory
     readonly property string currentFilePath: videoInfoItem.filePath
     readonly property int currentRotationAngle: videoInfoItem.rotationAngle
     readonly property bool hasSelectedVideo: (
@@ -149,6 +152,15 @@ Item {
     component HandCursor: HoverHandler {
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         cursorShape: parent.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+    }
+
+    FolderDialog {
+        id: outputFolderDialog
+        title: "选择输出文件夹"
+        currentFolder: homeService.localPathToUrl(root.outputDirectory)
+        onAccepted: {
+            root.outputDirectory = homeService.normalizeLocalPath(selectedFolder.toString())
+        }
     }
 
     // ── 画面方向互斥组 ──
@@ -526,6 +538,57 @@ Item {
                                         Layout.alignment: Qt.AlignVCenter
                                     }
                                 }
+
+                                // 第三行：输出文件夹
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 10
+
+                                    Text {
+                                        text: "输出文件夹"
+                                        font.pixelSize: 13
+                                        font.family: "Microsoft YaHei UI"
+                                        color: "#1a1a1a"
+                                        verticalAlignment: Text.AlignVCenter
+                                        renderType: Text.NativeRendering
+                                    }
+
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 36
+                                        radius: 6
+                                        color: "#ffffff"
+                                        border.color: "#d0d7de"
+                                        border.width: 1
+                                        clip: true
+
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 12
+                                            anchors.rightMargin: 12
+                                            text: root.outputDirectory
+                                            font.pixelSize: 12
+                                            font.family: "Microsoft YaHei UI"
+                                            color: "#5c6670"
+                                            verticalAlignment: Text.AlignVCenter
+                                            elide: Text.ElideMiddle
+                                            renderType: Text.NativeRendering
+                                        }
+                                    }
+
+                                    Button {
+                                        text: "浏览"
+                                        onClicked: outputFolderDialog.open()
+                                        HandCursor {}
+                                    }
+
+                                    Button {
+                                        text: "默认"
+                                        enabled: root.outputDirectory !== root.defaultOutputDirectory
+                                        onClicked: root.outputDirectory = root.defaultOutputDirectory
+                                        HandCursor {}
+                                    }
+                                }
                             }
                         }
 
@@ -609,7 +672,7 @@ Item {
             var processMode = videoProcessMode.currentIndex
             var isLandscape = landscapeRadio.checked
             var coverPath = coverSelecter.hasCover ? coverSelecter.coverSource.toString() : ""
-            processingService.startMerge(processMode, isLandscape, coverPath, items)
+            processingService.startMerge(processMode, isLandscape, coverPath, root.outputDirectory, items)
             root.startProcessing()
         }
         anchors.right: parent.right

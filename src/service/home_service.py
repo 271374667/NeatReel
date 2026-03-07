@@ -3,10 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from loguru import logger
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import Property, QObject, QThread, QUrl, Signal, Slot
 from PySide6.QtGui import QImage
 
 from src.common.video_info_reader import VideoInfoReader, CropResult
+from src.core.paths import OUTPUT_DIR
 from src.service.image_provider import ThumbnailImageProvider, pil_to_qimage
 
 
@@ -144,6 +145,15 @@ class HomeService(QObject):
         self._thumb_counter = 0
         self._workers: list[QThread] = []
 
+    def _get_default_output_directory(self) -> str:
+        return str(OUTPUT_DIR.resolve())
+
+    defaultOutputDirectory = Property(
+        str,
+        _get_default_output_directory,
+        constant=True,
+    )
+
     # ── private helpers ──────────────────────────────────────────
     def _cleanup_workers(self) -> None:
         self._workers = [w for w in self._workers if w.isRunning()]
@@ -251,6 +261,20 @@ class HomeService(QObject):
             confidence=1.0,
             has_border=True,
         )
+
+    @Slot(str, result=str)
+    def normalizeLocalPath(self, raw_path: str) -> str:
+        if not raw_path:
+            return self.defaultOutputDirectory
+
+        url = QUrl(raw_path)
+        local_path = url.toLocalFile() if url.isLocalFile() else raw_path
+        return str(Path(local_path).expanduser().resolve(strict=False))
+
+    @Slot(str, result=str)
+    def localPathToUrl(self, raw_path: str) -> str:
+        normalized = self.normalizeLocalPath(raw_path)
+        return QUrl.fromLocalFile(normalized).toString()
 
     # ── slots (called from QML) ──────────────────────────────────
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from time import monotonic
 
 from loguru import logger
-from PySide6.QtCore import QObject, QThread, QTimer, QUuid, Signal, Slot
+from PySide6.QtCore import QObject, QThread, QTimer, QUuid, QUrl, Signal, Slot
 from PySide6.QtGui import QImage
 
 from src.common.video_info_reader import CropResult, VideoInfoReader
@@ -66,6 +66,15 @@ def _pil_to_qimage(pil_image) -> QImage:
         data, pil_image.width, pil_image.height, QImage.Format.Format_RGBA8888
     )
     return qimg.copy()
+
+
+def _coerce_local_path(raw_path: str) -> Path | None:
+    if not raw_path:
+        return None
+
+    url = QUrl(raw_path)
+    local_path = url.toLocalFile() if url.isLocalFile() else raw_path
+    return Path(local_path).expanduser()
 
 
 # ── merge worker ─────────────────────────────────────────────────
@@ -217,27 +226,23 @@ class ProcessingService(QObject):
 
     # ── slots (called from QML) ──────────────────────────────────
 
-    @Slot(int, bool, str, "QVariantList")
+    @Slot(int, bool, str, str, "QVariantList")
     def startMerge(
         self,
         process_mode_index: int,
         is_landscape: bool,
         cover_path: str,
+        output_directory: str,
         video_items: list,
     ) -> None:
         process_mode = _PROCESS_MODE_MAP.get(process_mode_index, VideoProcessMode.BALANCED)
         orientation = Orientation.HORIZONTAL if is_landscape else Orientation.VERTICAL
 
-        cover: Path | None = None
-        if cover_path:
-            raw = cover_path
-            if raw.startswith("file:///"):
-                raw = raw[8:]
-            cover = Path(raw)
-
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        cover = _coerce_local_path(cover_path)
+        output_dir = _coerce_local_path(output_directory) or OUTPUT_DIR
+        output_dir.mkdir(parents=True, exist_ok=True)
         self._project_id = self._generate_project_id()
-        self._output_path = OUTPUT_DIR / f"{self._project_id}.mp4"
+        self._output_path = output_dir / f"{self._project_id}.mp4"
 
         # Reset state
         self._total_files = 0
