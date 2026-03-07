@@ -35,6 +35,7 @@ _PROCESS_MODE_MAP = {
     0: VideoProcessMode.SPEED,
     1: VideoProcessMode.BALANCED,
     2: VideoProcessMode.QUALITY,
+    3: VideoProcessMode.GPU,
 }
 
 

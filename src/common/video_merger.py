@@ -60,6 +60,7 @@ class VideoProcessMode(Enum):
     QUALITY = 0
     BALANCED = 1
     SPEED = 2
+    GPU = 3
 
 
 _PREVIEW_MAX_EDGE = 320
@@ -97,8 +98,10 @@ class VideoMerger:
     # QUALITY: 最高画质
     # BALANCED: 均衡模式
     # SPEED: 最高速度
+    # GPU: NVIDIA NVENC 硬件编码
     _MODE_CONFIGS: dict[VideoProcessMode, dict] = {
         VideoProcessMode.QUALITY: {
+            "video_codec": "libx264",
             "codec_options": {
                 "preset": "slow",
                 "crf": "23",
@@ -110,8 +113,10 @@ class VideoMerger:
             "audio_bitrate": 256_000,
             "container_options": {"movflags": "+faststart"},
             "scale_flags": "bicubic",
+            "pixel_format": "yuv420p",
         },
         VideoProcessMode.BALANCED: {
+            "video_codec": "libx264",
             "codec_options": {
                 "preset": "fast",
                 "crf": "23",
@@ -120,8 +125,10 @@ class VideoMerger:
             "audio_bitrate": 192_000,
             "container_options": {"movflags": "+faststart"},
             "scale_flags": "bicubic",
+            "pixel_format": "yuv420p",
         },
         VideoProcessMode.SPEED: {
+            "video_codec": "libx264",
             "codec_options": {
                 "preset": "veryfast",
                 "crf": "20",
@@ -129,6 +136,26 @@ class VideoMerger:
             "audio_bitrate": 160_000,
             "container_options": {"movflags": "+faststart"},
             "scale_flags": "bilinear",
+            "pixel_format": "yuv420p",
+        },
+        VideoProcessMode.GPU: {
+            "video_codec": "av1_nvenc",
+            "codec_options": {
+                "preset": "p7",
+                "tune": "hq",
+                "rc": "vbr",
+                "cq": "30",
+                "b": "0",
+                "multipass": "fullres",
+                "rc-lookahead": "32",
+                "spatial-aq": "1",
+                "temporal-aq": "1",
+                "aq-strength": "8",
+            },
+            "audio_bitrate": 256_000,
+            "container_options": {"movflags": "+faststart"},
+            "scale_flags": "bicubic",
+            "pixel_format": "yuv420p",
         },
     }
 
@@ -286,16 +313,18 @@ class VideoMerger:
             mode="w",
             options=mode_cfg.get("container_options"),
         )
+        video_codec = mode_cfg.get("video_codec", "libx264")
+        video_pixel_format = mode_cfg.get("pixel_format", "yuv420p")
 
         audio_time_base = Fraction(1, target_audio_rate)
 
         # 在 mux 任何 packet 之前，先把视频和音频两个输出流都注册好，
         # 否则 MP4 muxer 在首次 mux() 时写入 header，
         # 遗漏后续添加的 stream，导致输出文件损坏。
-        out_video = output_container.add_stream("libx264", rate=target_fps_fraction)
+        out_video = output_container.add_stream(video_codec, rate=target_fps_fraction)
         out_video.width = target_width
         out_video.height = target_height
-        out_video.pix_fmt = "yuv420p"
+        out_video.pix_fmt = video_pixel_format
         out_video.time_base = video_time_base
         out_video.thread_type = "AUTO"
         out_video.codec_context.options = mode_cfg["codec_options"]
@@ -400,6 +429,7 @@ class VideoMerger:
                     target_height,
                     effective_fps,
                     mode_cfg["scale_flags"],
+                    video_pixel_format,
                 )
 
                 # 创建音频重采样器，统一采样率、采样格式和声道布局
@@ -608,6 +638,7 @@ class VideoMerger:
         target_height: int,
         target_fps: int | None = None,
         scale_flags: str = "bicubic",
+        pixel_format: str = "yuv420p",
     ) -> dict[str, object]:
         """构建滤镜图: 裁剪 -> 旋转 -> 帧率转换 -> 缩放+填充到目标尺寸。"""
         graph = av.filter.Graph()
@@ -684,7 +715,7 @@ class VideoMerger:
             last = pad
 
         # 显式指定像素格式，避免编码器隐式转换的额外开销
-        fmt = graph.add("format", args="pix_fmts=yuv420p")
+        fmt = graph.add("format", args=f"pix_fmts={pixel_format}")
         last.link_to(fmt)
         last = fmt
 
