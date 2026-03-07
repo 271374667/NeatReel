@@ -23,7 +23,7 @@ class _ThumbnailWorker(QThread):
     """Background thread: read_info + generate_thumb_image."""
 
     finished = Signal(int, object, object)  # request_id, QImage, info_dict
-    error = Signal(int, str)  # request_id, message
+    error = Signal(int, str, str)  # request_id, preview_mode, message
 
     def __init__(
         self,
@@ -31,7 +31,9 @@ class _ThumbnailWorker(QThread):
         video_path: str,
         rotate_angle: int,
         orientation: int,
+        crop_override: CropResult | None,
         no_crop: bool,
+        preview_mode: str,
         auto_detect_rotation: bool = False,
     ):
         super().__init__()
@@ -39,7 +41,9 @@ class _ThumbnailWorker(QThread):
         self._video_path = video_path
         self._rotate_angle = rotate_angle
         self._orientation = orientation
+        self._crop_override = crop_override
         self._no_crop = no_crop
+        self._preview_mode = preview_mode
         self._auto_detect_rotation = auto_detect_rotation
 
     def run(self) -> None:
@@ -47,16 +51,23 @@ class _ThumbnailWorker(QThread):
             reader = VideoInfoReader()
             video_info = reader.read_info(Path(self._video_path))
 
-            crop = None
-            if not self._no_crop and video_info.crop_result is not None and video_info.crop_result.has_border:
-                crop = video_info.crop_result
+            effective_crop = self._crop_override
+            if effective_crop is None:
+                detected_crop = video_info.crop_result
+                if detected_crop is not None and detected_crop.has_border:
+                    effective_crop = detected_crop
+            effective_crop = VideoInfoReader.normalize_crop_result(
+                effective_crop,
+                int(video_info.width),
+                int(video_info.height),
+            )
 
             # Auto-detect rotation: check if cropped dimensions already match target orientation
             rotate_angle = self._rotate_angle
             recommended_rotation = None
             if self._auto_detect_rotation:
-                eff_w = crop.width if crop is not None else video_info.width
-                eff_h = crop.height if crop is not None else video_info.height
+                eff_w = effective_crop.width if effective_crop is not None else video_info.width
+                eff_h = effective_crop.height if effective_crop is not None else video_info.height
                 # orientation: 0=landscape (width>=height), 1=portrait (height>width)
                 if self._orientation == 0:
                     orientation_matches = eff_w >= eff_h
@@ -65,27 +76,53 @@ class _ThumbnailWorker(QThread):
                 recommended_rotation = 0 if orientation_matches else 90
                 rotate_angle = recommended_rotation
 
-            pil_image = reader.generate_thumb_image(
-                video_path=self._video_path,
-                crop_result=crop,
-                rotate_angle=rotate_angle,
-                orientation=self._orientation,
-            )
+            preview_crop = None if self._no_crop else effective_crop
+            if self._preview_mode == "manual_crop":
+                pil_image = reader.generate_preview_frame_image(
+                    video_path=self._video_path,
+                    frame_index=0,
+                    rotate_angle=rotate_angle,
+                )
+            else:
+                pil_image = reader.generate_thumb_image(
+                    video_path=self._video_path,
+                    crop_result=preview_crop,
+                    rotate_angle=rotate_angle,
+                    orientation=self._orientation,
+                )
 
             qimage = pil_to_qimage(pil_image)
+            crop_rect = effective_crop or CropResult(
+                x=0,
+                y=0,
+                width=int(video_info.width),
+                height=int(video_info.height),
+                confidence=0.0,
+                has_border=False,
+            )
 
             info_dict = {
+                "previewMode": self._preview_mode,
                 "durationAndResolution": (
                     f"{_format_duration(video_info.duration_second)}"
                     f" / {video_info.width}x{video_info.height}"
                 ),
+                "cropRect": {
+                    "x": int(crop_rect.x),
+                    "y": int(crop_rect.y),
+                    "width": int(crop_rect.width),
+                    "height": int(crop_rect.height),
+                },
+                "originalWidth": int(video_info.width),
+                "originalHeight": int(video_info.height),
+                "rotateAngle": int(rotate_angle),
             }
             if recommended_rotation is not None:
                 info_dict["recommendedRotation"] = recommended_rotation
             self.finished.emit(self._request_id, qimage, info_dict)
         except Exception as exc:
             logger.exception("thumbnail worker error")
-            self.error.emit(self._request_id, str(exc))
+            self.error.emit(self._request_id, self._preview_mode, str(exc))
 
 
 # ── HomeService (exposed to QML as context property) ─────────────
@@ -95,7 +132,10 @@ class HomeService(QObject):
     thumbnailReady = Signal(str)            # image://thumbnail/<id>
     videoInfoReady = Signal(str)            # durationAndResolution string
     recommendedRotationReady = Signal(int)  # auto-detected rotation angle (0 or 90)
+    cropRectReady = Signal(int, int, int, int, int, int)
+    manualCropSessionReady = Signal(str, int, int, int, int, int, int, int)
     errorOccurred = Signal(str)
+    manualCropErrorOccurred = Signal(str)
 
     def __init__(self, image_provider: ThumbnailImageProvider, parent: QObject | None = None):
         super().__init__(parent)
@@ -113,16 +153,28 @@ class HomeService(QObject):
         file_path: str,
         rotate_angle: int,
         orientation: int,
+        crop_override: CropResult | None,
         no_crop: bool,
+        preview_mode: str,
         auto_detect_rotation: bool = False,
     ) -> None:
         self._cleanup_workers()
         self._thumb_request_id += 1
         rid = self._thumb_request_id
 
-        self.displayStateChanged.emit(1)  # Loading
+        if preview_mode == "grid":
+            self.displayStateChanged.emit(1)  # Loading
 
-        worker = _ThumbnailWorker(rid, file_path, rotate_angle, orientation, no_crop, auto_detect_rotation)
+        worker = _ThumbnailWorker(
+            rid,
+            file_path,
+            rotate_angle,
+            orientation,
+            crop_override,
+            no_crop,
+            preview_mode,
+            auto_detect_rotation,
+        )
         worker.finished.connect(self._on_thumbnail_ready)
         worker.error.connect(self._on_thumbnail_error)
         worker.start()
@@ -136,31 +188,143 @@ class HomeService(QObject):
         image_id = f"thumb_{self._thumb_counter}"
         self._image_provider.set_image(image_id, qimage)
 
-        self.thumbnailReady.emit(f"image://thumbnail/{image_id}")
+        image_url = f"image://thumbnail/{image_id}"
+        crop_rect = info_dict["cropRect"]
+        self.cropRectReady.emit(
+            int(crop_rect["x"]),
+            int(crop_rect["y"]),
+            int(crop_rect["width"]),
+            int(crop_rect["height"]),
+            int(info_dict["originalWidth"]),
+            int(info_dict["originalHeight"]),
+        )
+
+        if info_dict["previewMode"] == "manual_crop":
+            self.manualCropSessionReady.emit(
+                image_url,
+                int(info_dict["rotateAngle"]),
+                int(info_dict["originalWidth"]),
+                int(info_dict["originalHeight"]),
+                int(crop_rect["x"]),
+                int(crop_rect["y"]),
+                int(crop_rect["width"]),
+                int(crop_rect["height"]),
+            )
+            return
+
+        self.thumbnailReady.emit(image_url)
         self.videoInfoReady.emit(info_dict["durationAndResolution"])
         if "recommendedRotation" in info_dict:
             self.recommendedRotationReady.emit(info_dict["recommendedRotation"])
         self.displayStateChanged.emit(2)  # Normal
 
-    def _on_thumbnail_error(self, request_id: int, message: str) -> None:
+    def _on_thumbnail_error(self, request_id: int, preview_mode: str, message: str) -> None:
         if request_id != self._thumb_request_id:
+            return
+        if preview_mode == "manual_crop":
+            self.manualCropErrorOccurred.emit(message)
             return
         self.errorOccurred.emit(message)
         self.displayStateChanged.emit(3)  # Error
 
+    @staticmethod
+    def _coerce_crop_result(crop_data: dict | None) -> CropResult | None:
+        if not crop_data:
+            return None
+
+        try:
+            x = int(crop_data.get("x", 0))
+            y = int(crop_data.get("y", 0))
+            width = int(crop_data.get("width", 0))
+            height = int(crop_data.get("height", 0))
+        except (TypeError, ValueError):
+            return None
+
+        if width <= 0 or height <= 0:
+            return None
+
+        return CropResult(
+            x=x,
+            y=y,
+            width=width,
+            height=height,
+            confidence=1.0,
+            has_border=True,
+        )
+
     # ── slots (called from QML) ──────────────────────────────────
 
-    @Slot(str, int, bool)
-    def onVideoItemClicked(self, file_path: str, rotation_angle: int, is_landscape: bool) -> None:
+    @Slot(str, int, bool, "QVariantMap")
+    def onVideoItemClicked(
+        self,
+        file_path: str,
+        rotation_angle: int,
+        is_landscape: bool,
+        crop_data: dict,
+    ) -> None:
         orientation = 0 if is_landscape else 1
-        self._generate_thumbnail(file_path, rotation_angle, orientation, no_crop=False, auto_detect_rotation=True)
+        crop_override = self._coerce_crop_result(crop_data)
+        self._generate_thumbnail(
+            file_path,
+            rotation_angle,
+            orientation,
+            crop_override,
+            no_crop=False,
+            preview_mode="grid",
+            auto_detect_rotation=True,
+        )
 
-    @Slot(str, int, bool)
-    def onRotatePreview(self, file_path: str, rotation_angle: int, is_landscape: bool) -> None:
+    @Slot(str, int, bool, "QVariantMap")
+    def onRotatePreview(
+        self,
+        file_path: str,
+        rotation_angle: int,
+        is_landscape: bool,
+        crop_data: dict,
+    ) -> None:
         orientation = 0 if is_landscape else 1
-        self._generate_thumbnail(file_path, rotation_angle, orientation, no_crop=False)
+        crop_override = self._coerce_crop_result(crop_data)
+        self._generate_thumbnail(
+            file_path,
+            rotation_angle,
+            orientation,
+            crop_override,
+            no_crop=False,
+            preview_mode="grid",
+        )
 
-    @Slot(str, int, bool)
-    def onPreviewOriginal(self, file_path: str, rotation_angle: int, is_landscape: bool) -> None:
+    @Slot(str, int, bool, "QVariantMap")
+    def onPreviewOriginal(
+        self,
+        file_path: str,
+        rotation_angle: int,
+        is_landscape: bool,
+        crop_data: dict,
+    ) -> None:
         orientation = 0 if is_landscape else 1
-        self._generate_thumbnail(file_path, rotation_angle, orientation, no_crop=True)
+        crop_override = self._coerce_crop_result(crop_data)
+        self._generate_thumbnail(
+            file_path,
+            rotation_angle,
+            orientation,
+            crop_override,
+            no_crop=True,
+            preview_mode="grid",
+        )
+
+    @Slot(str, int, "QVariantMap")
+    def onOpenManualCrop(
+        self,
+        file_path: str,
+        rotation_angle: int,
+        crop_data: dict,
+    ) -> None:
+        crop_override = self._coerce_crop_result(crop_data)
+        self._generate_thumbnail(
+            file_path,
+            rotation_angle,
+            0,
+            crop_override,
+            no_crop=True,
+            preview_mode="manual_crop",
+        )

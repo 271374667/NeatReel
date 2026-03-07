@@ -156,7 +156,15 @@ Item {
         var items = [];
         for (var i = 0; i < videoModel.count; i++) {
             var it = videoModel.get(i);
-            items.push({ filePath: it.filePath, rotation: it.rotation });
+            items.push({
+                filePath: it.filePath,
+                rotation: it.rotation,
+                manualCropEnabled: !!it.manualCropEnabled,
+                manualCropX: Number(it.manualCropX || 0),
+                manualCropY: Number(it.manualCropY || 0),
+                manualCropWidth: Number(it.manualCropWidth || 0),
+                manualCropHeight: Number(it.manualCropHeight || 0)
+            });
         }
         return items;
     }
@@ -174,6 +182,44 @@ Item {
         return 90;
     }
 
+    function setItemManualCrop(idx, cropInfo) {
+        if (idx < 0 || idx >= videoModel.count || !cropInfo)
+            return;
+
+        videoModel.setProperty(idx, "manualCropEnabled", true);
+        videoModel.setProperty(idx, "manualCropX", Math.round(Number(cropInfo.x || 0)));
+        videoModel.setProperty(idx, "manualCropY", Math.round(Number(cropInfo.y || 0)));
+        videoModel.setProperty(idx, "manualCropWidth", Math.round(Number(cropInfo.width || 0)));
+        videoModel.setProperty(idx, "manualCropHeight", Math.round(Number(cropInfo.height || 0)));
+    }
+
+    function clearItemManualCrop(idx) {
+        if (idx < 0 || idx >= videoModel.count)
+            return;
+
+        videoModel.setProperty(idx, "manualCropEnabled", false);
+        videoModel.setProperty(idx, "manualCropX", 0);
+        videoModel.setProperty(idx, "manualCropY", 0);
+        videoModel.setProperty(idx, "manualCropWidth", 0);
+        videoModel.setProperty(idx, "manualCropHeight", 0);
+    }
+
+    function getItemManualCrop(idx) {
+        if (idx < 0 || idx >= videoModel.count)
+            return {};
+
+        var item = videoModel.get(idx);
+        if (!item.manualCropEnabled)
+            return {};
+
+        return {
+            x: Number(item.manualCropX || 0),
+            y: Number(item.manualCropY || 0),
+            width: Number(item.manualCropWidth || 0),
+            height: Number(item.manualCropHeight || 0)
+        };
+    }
+
     // ── 智能排序 ──
     function smartSort(ascending) {
         var count = videoModel.count;
@@ -183,7 +229,16 @@ Item {
         var items = [];
         for (var i = 0; i < count; i++) {
             var it = videoModel.get(i);
-            items.push({ filePath: it.filePath, rotation: it.rotation, tempName: root.getFileName(it.filePath) });
+            items.push({
+                filePath: it.filePath,
+                rotation: it.rotation,
+                manualCropEnabled: !!it.manualCropEnabled,
+                manualCropX: Number(it.manualCropX || 0),
+                manualCropY: Number(it.manualCropY || 0),
+                manualCropWidth: Number(it.manualCropWidth || 0),
+                manualCropHeight: Number(it.manualCropHeight || 0),
+                tempName: root.getFileName(it.filePath)
+            });
         }
 
         var names = items.map(function(x) { return x.tempName; });
@@ -223,7 +278,15 @@ Item {
         // 重建 model
         videoModel.clear();
         for (var j = 0; j < items.length; j++) {
-            videoModel.append({ filePath: items[j].filePath, rotation: items[j].rotation });
+            videoModel.append({
+                filePath: items[j].filePath,
+                rotation: items[j].rotation,
+                manualCropEnabled: items[j].manualCropEnabled,
+                manualCropX: items[j].manualCropX,
+                manualCropY: items[j].manualCropY,
+                manualCropWidth: items[j].manualCropWidth,
+                manualCropHeight: items[j].manualCropHeight
+            });
         }
         root.clearSelection();
     }
@@ -273,7 +336,12 @@ Item {
             path = decodeURIComponent(path);
             videoModel.append({
                 filePath: path,
-                rotation: 90
+                rotation: 90,
+                manualCropEnabled: false,
+                manualCropX: 0,
+                manualCropY: 0,
+                manualCropWidth: 0,
+                manualCropHeight: 0
             });
         }
     }

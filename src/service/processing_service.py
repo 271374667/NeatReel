@@ -10,7 +10,7 @@ from loguru import logger
 from PySide6.QtCore import QObject, QThread, QTimer, QUuid, Signal, Slot
 from PySide6.QtGui import QImage
 
-from src.common.video_info_reader import VideoInfoReader
+from src.common.video_info_reader import CropResult, VideoInfoReader
 from src.common.video_merger import (
     InputVideoInfo,
     Orientation,
@@ -90,23 +90,54 @@ class _MergeWorker(QThread):
     def run(self) -> None:
         signals = get_merge_signals()
         try:
+            def _manual_crop_from_item(item: dict) -> CropResult | None:
+                if not item.get("manualCropEnabled"):
+                    return None
+
+                try:
+                    x = int(item.get("manualCropX", 0))
+                    y = int(item.get("manualCropY", 0))
+                    width = int(item.get("manualCropWidth", 0))
+                    height = int(item.get("manualCropHeight", 0))
+                except (TypeError, ValueError):
+                    return None
+
+                if width <= 0 or height <= 0:
+                    return None
+
+                return CropResult(
+                    x=x,
+                    y=y,
+                    width=width,
+                    height=height,
+                    confidence=1.0,
+                    has_border=True,
+                )
+
             def _read_single(item: dict):
                 reader = VideoInfoReader()
                 path = Path(item["filePath"])
                 info = reader.read_info(path)
-                return item, info
+                manual_crop = _manual_crop_from_item(item)
+                effective_crop = manual_crop if manual_crop is not None else info.crop_result
+                effective_crop = VideoInfoReader.normalize_crop_result(
+                    effective_crop,
+                    int(info.width),
+                    int(info.height),
+                )
+                return item, info, effective_crop
 
             with ThreadPoolExecutor() as pool:
                 results = list(pool.map(_read_single, self._video_items))
 
             input_files: list[InputVideoInfo] = []
-            for item, info in results:
+            for item, info, effective_crop in results:
                 angle = int(item.get("rotation", 0)) % 360
                 rotation = _ROTATION_MAP.get(angle, Rotation.ROTATE_0)
                 input_files.append(
                     InputVideoInfo(
                         file_path=Path(item["filePath"]),
-                        crop_result=info.crop_result,
+                        crop_result=effective_crop,
                         rotation=rotation,
                         width=info.width,
                         height=info.height,

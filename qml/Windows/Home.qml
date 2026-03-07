@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.FluentWinUI3
 import QtQuick.Layouts
@@ -12,12 +13,16 @@ Item {
     signal requestCropPreview(string filePath)
     signal requestRotatePreview(string filePath, int angle)
     signal startProcessing()
+    signal openManualCropRequested()
 
     property bool orientationDebouncing: false
     property bool topActionButtonsDebouncing: false
     property string previewFrameSource: ""
     property bool showingOriginal: false
     property int previewDisplayState: DisplayScreen.State.Waiting
+    property var currentCropRect: ({})
+    readonly property string currentFilePath: videoInfoItem.filePath
+    readonly property int currentRotationAngle: videoInfoItem.rotationAngle
     readonly property bool hasSelectedVideo: (
         typeof dropList !== "undefined"
         && dropList.currentIndex >= 0
@@ -49,6 +54,17 @@ Item {
             root.previewFrameSource = imageUrl
         }
 
+        function onCropRectReady(x, y, width, height, sourceWidth, sourceHeight) {
+            root.currentCropRect = {
+                x: x,
+                y: y,
+                width: width,
+                height: height,
+                sourceWidth: sourceWidth,
+                sourceHeight: sourceHeight
+            }
+        }
+
         function onVideoInfoReady(durationAndResolution) {
             videoInfoItem.durationAndResolution = durationAndResolution
         }
@@ -74,6 +90,37 @@ Item {
     function beginTopActionButtonsDebounce() {
         topActionButtonsDebouncing = true
         topActionButtonsDebounceTimer.restart()
+    }
+
+    function currentManualCropPayload() {
+        if (typeof dropList === "undefined" || dropList.currentIndex < 0)
+            return {}
+        return dropList.getItemManualCrop(dropList.currentIndex)
+    }
+
+    function applyManualCrop(cropInfo) {
+        if (typeof dropList === "undefined" || dropList.currentIndex < 0 || !cropInfo)
+            return
+
+        dropList.setItemManualCrop(dropList.currentIndex, cropInfo)
+        currentCropRect = {
+            x: Number(cropInfo.x || 0),
+            y: Number(cropInfo.y || 0),
+            width: Number(cropInfo.width || 0),
+            height: Number(cropInfo.height || 0),
+            sourceWidth: Number(cropInfo.sourceWidth || 0),
+            sourceHeight: Number(cropInfo.sourceHeight || 0)
+        }
+        showingOriginal = false
+
+        if (videoInfoItem.filePath) {
+            homeService.onRotatePreview(
+                videoInfoItem.filePath,
+                videoInfoItem.rotationAngle,
+                landscapeRadio.checked,
+                currentManualCropPayload()
+            )
+        }
     }
 
     function updateRotationAngle(delta) {
@@ -138,6 +185,7 @@ Item {
                 onLeftclicked: function(data) {
                     if (data && data.filePath) {
                         root.showingOriginal = false
+                        root.currentCropRect = {}
                         videoInfoItem.filePath = data.filePath
                         var pathStr = data.filePath.toString().replace(/\\/g, "/")
                         var parts = pathStr.split("/")
@@ -148,7 +196,8 @@ Item {
                         homeService.onVideoItemClicked(
                             data.filePath,
                             videoInfoItem.rotationAngle,
-                            landscapeRadio.checked
+                            landscapeRadio.checked,
+                            dropList.getItemManualCrop(dropList.currentIndex)
                         )
                     }
                 }
@@ -156,6 +205,7 @@ Item {
                     if (videoInfoItem.filePath === filePath) {
                         root.previewFrameSource = ""
                         root.showingOriginal = false
+                        root.currentCropRect = {}
                         videoInfoItem.fileName = ""
                         videoInfoItem.filePath = ""
                         videoInfoItem.durationAndResolution = ""
@@ -199,6 +249,7 @@ Item {
                         id: detailContent
                         width: parent.width
                         spacing: 10
+                        readonly property real actionButtonWidth: Math.max(0, (width - 8) / 2)
 
                         // ── 视频预览 ──
                         DisplayScreen {
@@ -210,31 +261,47 @@ Item {
                         }
 
                         // ── 预览去黑边效果（切换按钮） ──
-                        Button {
-                            text: root.showingOriginal ? "预览去黑边后的视频" : "预览原视频(不去黑边)"
+                        RowLayout {
                             Layout.fillWidth: true
-                            icon.source: ImagePath.crop
-                            enabled: root.topActionButtonsEnabled
-                            onClicked: {
-                                root.beginTopActionButtonsDebounce()
-                                if (videoInfoItem.filePath) {
-                                    root.showingOriginal = !root.showingOriginal
-                                    if (root.showingOriginal) {
-                                        homeService.onPreviewOriginal(
-                                            videoInfoItem.filePath,
-                                            videoInfoItem.rotationAngle,
-                                            landscapeRadio.checked
-                                        )
-                                    } else {
-                                        homeService.onRotatePreview(
-                                            videoInfoItem.filePath,
-                                            videoInfoItem.rotationAngle,
-                                            landscapeRadio.checked
-                                        )
+                            spacing: 8
+
+                            Button {
+                                text: root.showingOriginal ? "预览去黑边后的视频" : "预览原视频(不去黑边)"
+                                Layout.preferredWidth: detailContent.actionButtonWidth
+                                icon.source: ImagePath.crop
+                                enabled: root.topActionButtonsEnabled
+                                onClicked: {
+                                    root.beginTopActionButtonsDebounce()
+                                    if (videoInfoItem.filePath) {
+                                        root.showingOriginal = !root.showingOriginal
+                                        if (root.showingOriginal) {
+                                            homeService.onPreviewOriginal(
+                                                videoInfoItem.filePath,
+                                                videoInfoItem.rotationAngle,
+                                                landscapeRadio.checked,
+                                                root.currentManualCropPayload()
+                                            )
+                                        } else {
+                                            homeService.onRotatePreview(
+                                                videoInfoItem.filePath,
+                                                videoInfoItem.rotationAngle,
+                                                landscapeRadio.checked,
+                                                root.currentManualCropPayload()
+                                            )
+                                        }
                                     }
                                 }
+                                HandCursor {}
                             }
-                            HandCursor {}
+
+                            Button {
+                                text: "手动剪裁"
+                                icon.source: ImagePath.crop
+                                Layout.preferredWidth: detailContent.actionButtonWidth
+                                enabled: root.topActionButtonsEnabled
+                                onClicked: root.openManualCropRequested()
+                                HandCursor {}
+                            }
                         }
 
                         // ── 旋转按钮行 ──
@@ -244,7 +311,7 @@ Item {
 
                             Button {
                                 text: "顺时针旋转90°"
-                                Layout.fillWidth: true
+                                Layout.preferredWidth: detailContent.actionButtonWidth
                                 icon.source: ImagePath.clockwise
                                 enabled: root.topActionButtonsEnabled
                                 onClicked: {
@@ -254,7 +321,8 @@ Item {
                                         homeService.onRotatePreview(
                                             videoInfoItem.filePath,
                                             videoInfoItem.rotationAngle,
-                                            landscapeRadio.checked
+                                            landscapeRadio.checked,
+                                            root.currentManualCropPayload()
                                         )
                                     }
                                 }
@@ -263,7 +331,7 @@ Item {
 
                             Button {
                                 text: "逆时针旋转90°"
-                                Layout.fillWidth: true
+                                Layout.preferredWidth: detailContent.actionButtonWidth
                                 icon.source: ImagePath.counterClockwise
                                 enabled: root.topActionButtonsEnabled
                                 onClicked: {
@@ -273,7 +341,8 @@ Item {
                                         homeService.onRotatePreview(
                                             videoInfoItem.filePath,
                                             videoInfoItem.rotationAngle,
-                                            landscapeRadio.checked
+                                            landscapeRadio.checked,
+                                            root.currentManualCropPayload()
                                         )
                                     }
                                 }
@@ -337,7 +406,8 @@ Item {
                                         homeService.onVideoItemClicked(
                                             videoInfoItem.filePath,
                                             videoInfoItem.rotationAngle,
-                                            true
+                                            true,
+                                            root.currentManualCropPayload()
                                         )
                                     }
                                 }
@@ -356,7 +426,8 @@ Item {
                                         homeService.onVideoItemClicked(
                                             videoInfoItem.filePath,
                                             videoInfoItem.rotationAngle,
-                                            false
+                                            false,
+                                            root.currentManualCropPayload()
                                         )
                                     }
                                 }
@@ -409,10 +480,15 @@ Item {
                                                 {
                                                     text: "质量",
                                                     tooltip: "比均衡慢 1~2 倍，体积减少 20%~40%"
+                                                },
+                                                {
+                                                    text: "GPU",
+                                                    tooltip: "需要有N卡硬件支持，否则会报错"
                                                 }
                                             ]
                                             currentIndex: 1
                                             delegate: ItemDelegate {
+                                                required property int index
                                                 required property var modelData
 
                                                 width: videoProcessMode.width

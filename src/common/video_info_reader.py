@@ -423,6 +423,83 @@ class VideoInfoReader:
                     idx += 1
         raise ValueError(f"帧索引 {frame_index} 超出视频范围: {video_path}")
 
+    def generate_preview_frame_image(
+        self,
+        video_path: Path | str,
+        frame_index: int = 0,
+        rotate_angle: int = 0,
+        max_edge: int = 1600,
+    ) -> PILImage.Image:
+        """
+        读取单帧预览图，用于手动裁剪页面。
+
+        Args:
+            video_path: 视频文件路径。
+            frame_index: 目标帧索引，默认取首帧。
+            rotate_angle: 顺时针旋转角度，仅支持 0/90/180/270。
+            max_edge: 预览图最长边限制，避免直接把超大原帧推给 QML。
+        """
+        try:
+            from PIL import Image
+        except ImportError as exc:
+            raise ImportError(
+                "未安装 Pillow，无法生成预览图。请先安装 pillow。"
+            ) from exc
+
+        if rotate_angle not in (0, 90, 180, 270):
+            raise ValueError("rotate_angle 仅支持 0、90、180、270")
+        if max_edge <= 0:
+            raise ValueError("max_edge 必须为正整数")
+
+        video_path = Path(video_path)
+        if not video_path.exists():
+            raise FileNotFoundError(f"video file not found: {video_path}")
+
+        with av.open(str(video_path)) as container:
+            if not container.streams.video:
+                raise ValueError(f"no video stream found: {video_path}")
+
+            stream = container.streams.video[0]
+            idx = 0
+            preview_image = None
+
+            for packet in container.demux(stream):
+                for frame in packet.decode():
+                    if idx == frame_index:
+                        preview_image = frame.to_image().convert("RGB")
+                        break
+                    idx += 1
+                if preview_image is not None:
+                    break
+
+        if preview_image is None:
+            raise ValueError(f"帧索引 {frame_index} 超出视频范围: {video_path}")
+
+        if rotate_angle != 0:
+            if hasattr(Image, "Transpose"):
+                rotate_map = {
+                    90: Image.Transpose.ROTATE_270,
+                    180: Image.Transpose.ROTATE_180,
+                    270: Image.Transpose.ROTATE_90,
+                }
+                preview_image = preview_image.transpose(rotate_map[rotate_angle])
+            else:
+                preview_image = preview_image.rotate(-rotate_angle, expand=True)
+
+        if max(preview_image.width, preview_image.height) > max_edge:
+            scale = max_edge / max(preview_image.width, preview_image.height)
+            target_size = (
+                max(1, int(round(preview_image.width * scale))),
+                max(1, int(round(preview_image.height * scale))),
+            )
+            if hasattr(Image, "Resampling"):
+                resample = Image.Resampling.LANCZOS
+            else:
+                resample = Image.LANCZOS
+            preview_image = preview_image.resize(target_size, resample)
+
+        return preview_image
+
     @_diskcache_method(
         _generate_thumb_key_builder,
         serializer=_serialize_thumb_cache_value,
@@ -1351,6 +1428,50 @@ class VideoInfoReader:
         if x1 <= x0 or y1 <= y0:
             raise ValueError("crop_result 超出视频范围，无法生成缩略图")
         return x0, y0, x1, y1
+
+    @staticmethod
+    def normalize_crop_result(
+        crop_result: Optional[CropResult],
+        src_width: int,
+        src_height: int,
+    ) -> Optional[CropResult]:
+        """
+        归一化裁剪区域，确保坐标合法且宽高为偶数。
+
+        `libx264 + yuv420p` 要求输出分辨率为偶数；手动裁剪时需要额外兜底。
+        """
+        if crop_result is None:
+            return None
+        if src_width < 2 or src_height < 2:
+            return None
+
+        max_left = max(0, src_width - 2)
+        max_top = max(0, src_height - 2)
+        left = max(0, min(int(crop_result.x), max_left))
+        top = max(0, min(int(crop_result.y), max_top))
+        left -= left % 2
+        top -= top % 2
+
+        max_width = VideoInfoReader._align2_down(src_width - left)
+        max_height = VideoInfoReader._align2_down(src_height - top)
+        if max_width < 2 or max_height < 2:
+            return None
+
+        width = max(2, min(int(crop_result.width), src_width - left))
+        height = max(2, min(int(crop_result.height), src_height - top))
+        width = VideoInfoReader._align2_down(width)
+        height = VideoInfoReader._align2_down(height)
+        width = max(2, min(width, max_width))
+        height = max(2, min(height, max_height))
+
+        return CropResult(
+            x=left,
+            y=top,
+            width=width,
+            height=height,
+            confidence=float(crop_result.confidence),
+            has_border=bool(crop_result.has_border),
+        )
 
     @staticmethod
     def _scale_crop_box(
