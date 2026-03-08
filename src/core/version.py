@@ -2,7 +2,7 @@ import json
 import urllib.request
 import urllib.error
 
-__version__ = "1.0.0"
+__version__ = "1.8.0"
 
 class VersionHandler:
     GITHUB_API_URL = "https://api.github.com/repos/271374667/NeatReel/releases"

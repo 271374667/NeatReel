@@ -1,6 +1,6 @@
 [project]
 name = "NeatReel"
-version = "1.0.0"
+version = "1.8.0"
 description = "净影连（NeatReel）是一个用于整理、预览和拼接视频的桌面应用。"
 readme = "README.md"
 requires-python = ">=3.11"
