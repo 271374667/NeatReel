@@ -123,81 +123,13 @@ Window {
 
         MenuItem {
             text: "关于"
-            onTriggered: aboutDialog.open()
+            onTriggered: aboutDialog.openWindow()
         }
     }
 
-    Dialog {
+    About {
         id: aboutDialog
-        parent: root.contentItem
-        modal: true
-        anchors.centerIn: parent
-        width: 420
-        title: "关于"
-        standardButtons: Dialog.Ok
-
-        contentItem: ColumnLayout {
-            spacing: 16
-
-            RowLayout {
-                spacing: 12
-
-                Rectangle {
-                    Layout.preferredWidth: 56
-                    Layout.preferredHeight: 56
-                    radius: 14
-                    color: "#f4f8ff"
-
-                    Image {
-                        anchors.centerIn: parent
-                        source: "Images/SmallLogo.png"
-                        sourceSize.width: 32
-                        sourceSize.height: 32
-                        fillMode: Image.PreserveAspectFit
-                    }
-                }
-
-                ColumnLayout {
-                    spacing: 2
-
-                    Text {
-                        text: "净影连 NeatReel"
-                        font.pixelSize: 20
-                        font.family: "Microsoft YaHei UI"
-                        font.weight: Font.DemiBold
-                        color: "#111827"
-                        renderType: Text.NativeRendering
-                    }
-
-                    Text {
-                        text: "FluentWinUI3 菜单栏"
-                        font.pixelSize: 13
-                        font.family: "Microsoft YaHei UI"
-                        color: "#667085"
-                        renderType: Text.NativeRendering
-                    }
-                }
-
-                Item { Layout.fillWidth: true }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 1
-                color: "#e6ebf1"
-            }
-
-            Text {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: "净影连用于批量裁剪、旋转和合并视频。顶部采用紧凑菜单栏，设置菜单中提供关于入口。"
-                font.pixelSize: 14
-                font.family: "Microsoft YaHei UI"
-                color: "#344054"
-                lineHeight: 1.4
-                renderType: Text.NativeRendering
-            }
-        }
+        transientParent: root
     }
 
     Connections {

@@ -18,4 +18,9 @@ QtObject {
     readonly property string videoList: imageDirectory + "/VideoList.svg"
     readonly property string movie: imageDirectory + "/Movie.svg"
     readonly property string add: imageDirectory + "/Add.svg"
+    readonly property string logo: imageDirectory + "/SmallLogo.svg"
+    readonly property string bilibili: imageDirectory + "/Bilibili.svg"
+    readonly property string github: imageDirectory + "/Github.svg"
+    readonly property string question: imageDirectory + "/Question.svg"
+    readonly property string refresh: imageDirectory + "/Refresh.svg"
 }
