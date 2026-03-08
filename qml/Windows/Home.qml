@@ -195,8 +195,9 @@ Item {
         }
     }
 
-    // ── 画面方向互斥组 ──
+    // ── 互斥组 ──
     ButtonGroup { id: orientationGroup }
+    ButtonGroup { id: outputModeGroup }
 
     // ════════════════════════════════════════════════════════
     //  主布局：左右两列
@@ -446,6 +447,39 @@ Item {
                                         root.refreshSelectedPreview(true)
                                     }
                                 }
+                                HandCursor {}
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        // ── 输出视频 ──
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 16
+
+                            Text {
+                                text: "输出视频"
+                                font.pixelSize: 13
+                                font.family: "Microsoft YaHei UI"
+                                font.weight: Font.Medium
+                                color: "#1a1a1a"
+                                verticalAlignment: Text.AlignVCenter
+                                renderType: Text.NativeRendering
+                            }
+
+                            RadioButton {
+                                id: mergeOutputRadio
+                                text: "合并成一个视频"
+                                checked: true
+                                ButtonGroup.group: outputModeGroup
+                                HandCursor {}
+                            }
+
+                            RadioButton {
+                                id: separateOutputRadio
+                                text: "分别输出"
+                                ButtonGroup.group: outputModeGroup
                                 HandCursor {}
                             }
 
@@ -703,8 +737,9 @@ Item {
             if (items.length === 0) return
             var processMode = videoProcessMode.currentIndex
             var isLandscape = landscapeRadio.checked
+            var outputMode = mergeOutputRadio.checked ? 0 : 1
             var coverPath = coverSelecter.hasCover ? coverSelecter.coverSource.toString() : ""
-            processingService.startMerge(processMode, isLandscape, coverPath, root.outputDirectory, items)
+            processingService.startMerge(processMode, isLandscape, outputMode, coverPath, root.outputDirectory, items)
             root.startProcessing()
         }
         anchors.right: parent.right
