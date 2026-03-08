@@ -85,6 +85,7 @@ def _read_info_key_builder(
     reader: "VideoInfoReader",
     video_path: Path,
     crop_result: Optional["CropResult"] = None,
+    enable_border_detection: bool = True,
 ) -> tuple | None:
     file_sig = _file_signature_for_cache(video_path)
     if file_sig is None:
@@ -107,6 +108,7 @@ def _read_info_key_builder(
         file_sig,
         reader_sig,
         _crop_to_cache_tuple(crop_result),
+        bool(enable_border_detection),
     )
 
 
@@ -311,7 +313,10 @@ class VideoInfoReader:
 
     @_diskcache_method(_read_info_key_builder, on_hit=lambda reader: reader._reset())
     def read_info(
-        self, video_path: Path, crop_result: Optional[CropResult] = None
+        self,
+        video_path: Path,
+        crop_result: Optional[CropResult] = None,
+        enable_border_detection: bool = True,
     ) -> VideoInfo:
         """
         传入视频路径，检测视频元数据与边框裁剪参数，返回 `VideoInfo`。
@@ -319,6 +324,7 @@ class VideoInfoReader:
         Args:
             video_path: 视频文件路径。
             crop_result: 可选的裁剪参数。若传入则跳过边框检测，直接使用该裁剪参数。
+            enable_border_detection: 是否执行自动黑边检测。关闭时仅返回基础元数据。
 
         内部根据视频时长自动选择采样策略：
         - 时长 < 2s：顺序解码全量帧后均匀采样
@@ -360,6 +366,9 @@ class VideoInfoReader:
             if crop_result is not None:
                 logger.debug(f"使用传入的裁剪参数，跳过边框检测: {crop_result}")
                 detected_crop = crop_result
+            elif not enable_border_detection:
+                logger.debug("已禁用边框检测，仅返回视频基础元数据")
+                detected_crop = None
             else:
                 plan = self._compute_sample_plan(duration, fps)
 

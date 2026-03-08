@@ -126,14 +126,21 @@ class _MergeWorker(QThread):
             def _read_single(item: dict):
                 reader = VideoInfoReader()
                 path = Path(item["filePath"])
-                info = reader.read_info(path)
+                use_auto_crop = bool(item.get("autoCropEnabled", True))
                 manual_crop = _manual_crop_from_item(item)
-                effective_crop = manual_crop if manual_crop is not None else info.crop_result
-                effective_crop = VideoInfoReader.normalize_crop_result(
-                    effective_crop,
-                    int(info.width),
-                    int(info.height),
+                info = reader.read_info(
+                    path,
+                    crop_result=manual_crop if use_auto_crop else None,
+                    enable_border_detection=use_auto_crop,
                 )
+                effective_crop = None
+                if use_auto_crop:
+                    effective_crop = manual_crop if manual_crop is not None else info.crop_result
+                    effective_crop = VideoInfoReader.normalize_crop_result(
+                        effective_crop,
+                        int(info.width),
+                        int(info.height),
+                    )
                 return item, info, effective_crop
 
             with ThreadPoolExecutor() as pool:
@@ -161,6 +168,7 @@ class _MergeWorker(QThread):
                 input_files=input_files,
                 output_file=self._output_path,
                 process_mode=self._process_mode,
+                enable_border_detection=False,
                 orientation=self._orientation,
                 cover_image_path=self._cover_path,
             )

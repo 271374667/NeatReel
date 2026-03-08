@@ -20,6 +20,7 @@ Item {
     property var selectedIndices: ({})
     property int selectionVersion: 0
     property int anchorIndex: -1
+    property bool defaultAutoCropEnabled: true
     readonly property string usageToolTipText: "鼠标拖放视频到此处添加视频\n快捷键说明：\n1. ctrl + A 全选\n2. ctrl + D, delete, backspace 删除\n3. ctrl + 鼠标左键 单选\n4. shift + 鼠标左键 连续选择\n\n长按单个视频进行拖拽排序\n\n右键可以智能排序以及展开更多操作"
 
     // ── 多选辅助函数 ──
@@ -159,6 +160,7 @@ Item {
             items.push({
                 filePath: it.filePath,
                 rotation: it.rotation,
+                autoCropEnabled: it.autoCropEnabled === undefined ? true : !!it.autoCropEnabled,
                 manualCropEnabled: !!it.manualCropEnabled,
                 manualCropX: Number(it.manualCropX || 0),
                 manualCropY: Number(it.manualCropY || 0),
@@ -180,6 +182,27 @@ Item {
             return videoModel.get(idx).rotation;
         }
         return 90;
+    }
+
+    function setItemAutoCropEnabled(idx, enabled) {
+        if (idx >= 0 && idx < videoModel.count) {
+            videoModel.setProperty(idx, "autoCropEnabled", !!enabled);
+        }
+    }
+
+    function getItemAutoCropEnabled(idx) {
+        if (idx >= 0 && idx < videoModel.count) {
+            var item = videoModel.get(idx);
+            return item.autoCropEnabled === undefined ? true : !!item.autoCropEnabled;
+        }
+        return true;
+    }
+
+    function setAllItemsAutoCropEnabled(enabled) {
+        var value = !!enabled;
+        for (var i = 0; i < videoModel.count; i++) {
+            videoModel.setProperty(i, "autoCropEnabled", value);
+        }
     }
 
     function setItemManualCrop(idx, cropInfo) {
@@ -232,6 +255,7 @@ Item {
             items.push({
                 filePath: it.filePath,
                 rotation: it.rotation,
+                autoCropEnabled: it.autoCropEnabled === undefined ? true : !!it.autoCropEnabled,
                 manualCropEnabled: !!it.manualCropEnabled,
                 manualCropX: Number(it.manualCropX || 0),
                 manualCropY: Number(it.manualCropY || 0),
@@ -281,6 +305,7 @@ Item {
             videoModel.append({
                 filePath: items[j].filePath,
                 rotation: items[j].rotation,
+                autoCropEnabled: items[j].autoCropEnabled,
                 manualCropEnabled: items[j].manualCropEnabled,
                 manualCropX: items[j].manualCropX,
                 manualCropY: items[j].manualCropY,
@@ -337,6 +362,7 @@ Item {
             videoModel.append({
                 filePath: path,
                 rotation: 90,
+                autoCropEnabled: root.defaultAutoCropEnabled,
                 manualCropEnabled: false,
                 manualCropX: 0,
                 manualCropY: 0,
@@ -663,7 +689,11 @@ Item {
                             } else {
                                 root.selectOnly(delegateRoot.index);
                                 if (mouse.button === Qt.LeftButton && mouse.modifiers === Qt.NoModifier) {
-                                    root.leftclicked({ "filePath": delegateRoot.filePath, "rotation": delegateRoot.rotation });
+                                    root.leftclicked({
+                                        "filePath": delegateRoot.filePath,
+                                        "rotation": delegateRoot.rotation,
+                                        "autoCropEnabled": root.getItemAutoCropEnabled(delegateRoot.index)
+                                    });
                                 }
                             }
                             mainContainer.forceActiveFocus();

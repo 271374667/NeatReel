@@ -20,6 +20,7 @@ Item {
     property bool topActionButtonsDebouncing: false
     property string previewFrameSource: ""
     property bool showingOriginal: false
+    property bool globalAutoCropEnabled: true
     property int previewDisplayState: DisplayScreen.State.Waiting
     property var currentCropRect: ({})
     property string defaultOutputDirectory: homeService.defaultOutputDirectory
@@ -101,11 +102,47 @@ Item {
         return dropList.getItemManualCrop(dropList.currentIndex)
     }
 
+    function currentAutoCropEnabled() {
+        if (typeof dropList === "undefined" || dropList.currentIndex < 0)
+            return globalAutoCropEnabled
+        return dropList.getItemAutoCropEnabled(dropList.currentIndex)
+    }
+
+    function syncSelectedAutoCropState() {
+        showingOriginal = !currentAutoCropEnabled()
+    }
+
+    function refreshSelectedPreview(autoDetectRotation) {
+        if (!videoInfoItem.filePath)
+            return
+
+        var useAutoCrop = currentAutoCropEnabled()
+        if (autoDetectRotation) {
+            homeService.onVideoItemClicked(
+                videoInfoItem.filePath,
+                videoInfoItem.rotationAngle,
+                landscapeRadio.checked,
+                useAutoCrop,
+                currentManualCropPayload()
+            )
+            return
+        }
+
+        homeService.onRotatePreview(
+            videoInfoItem.filePath,
+            videoInfoItem.rotationAngle,
+            landscapeRadio.checked,
+            useAutoCrop,
+            currentManualCropPayload()
+        )
+    }
+
     function applyManualCrop(cropInfo) {
         if (typeof dropList === "undefined" || dropList.currentIndex < 0 || !cropInfo)
             return
 
         dropList.setItemManualCrop(dropList.currentIndex, cropInfo)
+        dropList.setItemAutoCropEnabled(dropList.currentIndex, true)
         currentCropRect = {
             x: Number(cropInfo.x || 0),
             y: Number(cropInfo.y || 0),
@@ -117,12 +154,7 @@ Item {
         showingOriginal = false
 
         if (videoInfoItem.filePath) {
-            homeService.onRotatePreview(
-                videoInfoItem.filePath,
-                videoInfoItem.rotationAngle,
-                landscapeRadio.checked,
-                currentManualCropPayload()
-            )
+            refreshSelectedPreview(false)
         }
     }
 
@@ -193,10 +225,11 @@ Item {
 
             DropableList {
                 id: dropList
+                defaultAutoCropEnabled: root.globalAutoCropEnabled
                 anchors.fill: parent
                 onLeftclicked: function(data) {
                     if (data && data.filePath) {
-                        root.showingOriginal = false
+                        root.showingOriginal = data.autoCropEnabled === false
                         root.currentCropRect = {}
                         videoInfoItem.filePath = data.filePath
                         var pathStr = data.filePath.toString().replace(/\\/g, "/")
@@ -209,6 +242,7 @@ Item {
                             data.filePath,
                             videoInfoItem.rotationAngle,
                             landscapeRadio.checked,
+                            data.autoCropEnabled !== false,
                             dropList.getItemManualCrop(dropList.currentIndex)
                         )
                     }
@@ -278,29 +312,18 @@ Item {
                             spacing: 8
 
                             Button {
-                                text: root.showingOriginal ? "预览去黑边后的视频" : "预览原视频(不去黑边)"
+                                id: autoCropToggleButton
+                                text: root.showingOriginal ? "使用自动去黑边算法" : "使用原始视频"
                                 Layout.preferredWidth: detailContent.actionButtonWidth
                                 icon.source: ImagePath.crop
                                 enabled: root.topActionButtonsEnabled
                                 onClicked: {
                                     root.beginTopActionButtonsDebounce()
                                     if (videoInfoItem.filePath) {
-                                        root.showingOriginal = !root.showingOriginal
-                                        if (root.showingOriginal) {
-                                            homeService.onPreviewOriginal(
-                                                videoInfoItem.filePath,
-                                                videoInfoItem.rotationAngle,
-                                                landscapeRadio.checked,
-                                                root.currentManualCropPayload()
-                                            )
-                                        } else {
-                                            homeService.onRotatePreview(
-                                                videoInfoItem.filePath,
-                                                videoInfoItem.rotationAngle,
-                                                landscapeRadio.checked,
-                                                root.currentManualCropPayload()
-                                            )
-                                        }
+                                        var nextUseAutoCrop = !root.currentAutoCropEnabled()
+                                        dropList.setItemAutoCropEnabled(dropList.currentIndex, nextUseAutoCrop)
+                                        root.showingOriginal = !nextUseAutoCrop
+                                        root.refreshSelectedPreview(false)
                                     }
                                 }
                                 HandCursor {}
@@ -330,12 +353,7 @@ Item {
                                     root.beginTopActionButtonsDebounce()
                                     root.updateRotationAngle(90)
                                     if (videoInfoItem.filePath) {
-                                        homeService.onRotatePreview(
-                                            videoInfoItem.filePath,
-                                            videoInfoItem.rotationAngle,
-                                            landscapeRadio.checked,
-                                            root.currentManualCropPayload()
-                                        )
+                                        root.refreshSelectedPreview(false)
                                     }
                                 }
                                 HandCursor {}
@@ -350,12 +368,7 @@ Item {
                                     root.beginTopActionButtonsDebounce()
                                     root.updateRotationAngle(-90)
                                     if (videoInfoItem.filePath) {
-                                        homeService.onRotatePreview(
-                                            videoInfoItem.filePath,
-                                            videoInfoItem.rotationAngle,
-                                            landscapeRadio.checked,
-                                            root.currentManualCropPayload()
-                                        )
+                                        root.refreshSelectedPreview(false)
                                     }
                                 }
                                 HandCursor {}
@@ -414,13 +427,8 @@ Item {
                                 onClicked: {
                                     root.beginOrientationDebounce()
                                     if (videoInfoItem.filePath) {
-                                        root.showingOriginal = false
-                                        homeService.onVideoItemClicked(
-                                            videoInfoItem.filePath,
-                                            videoInfoItem.rotationAngle,
-                                            true,
-                                            root.currentManualCropPayload()
-                                        )
+                                        root.syncSelectedAutoCropState()
+                                        root.refreshSelectedPreview(true)
                                     }
                                 }
                                 HandCursor {}
@@ -434,13 +442,8 @@ Item {
                                 onClicked: {
                                     root.beginOrientationDebounce()
                                     if (videoInfoItem.filePath) {
-                                        root.showingOriginal = false
-                                        homeService.onVideoItemClicked(
-                                            videoInfoItem.filePath,
-                                            videoInfoItem.rotationAngle,
-                                            false,
-                                            root.currentManualCropPayload()
-                                        )
+                                        root.syncSelectedAutoCropState()
+                                        root.refreshSelectedPreview(true)
                                     }
                                 }
                                 HandCursor {}
@@ -459,13 +462,14 @@ Item {
                                 width: parent.width
                                 spacing: 12
 
-                                // 第一行：处理模式 + 旋转角度
+                                // 第一行：处理模式 + 启动自动剪裁
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: 12
 
                                     ColumnLayout {
                                         Layout.fillWidth: true
+                                        Layout.preferredWidth: 1
                                         spacing: 4
 
                                         Text {
@@ -513,6 +517,34 @@ Item {
                                                 ToolTip.text: modelData.tooltip
                                             }
                                             HandCursor {}
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        Layout.preferredWidth: 1
+                                        spacing: 4
+
+                                        Text {
+                                            text: "启动自动剪裁"
+                                            font.pixelSize: 12
+                                            font.family: "Microsoft YaHei UI"
+                                            color: "#5c6670"
+                                            renderType: Text.NativeRendering
+                                        }
+
+                                        Switch {
+                                            id: globalAutoCropSwitch
+                                            Layout.alignment: Qt.AlignLeft
+                                            checked: root.globalAutoCropEnabled
+                                            onToggled: {
+                                                root.globalAutoCropEnabled = checked
+                                                dropList.setAllItemsAutoCropEnabled(checked)
+                                                if (videoInfoItem.filePath) {
+                                                    root.showingOriginal = !checked
+                                                    root.refreshSelectedPreview(false)
+                                                }
+                                            }
                                         }
                                     }
                                 }

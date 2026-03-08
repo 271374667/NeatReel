@@ -33,7 +33,7 @@ class _ThumbnailWorker(QThread):
         rotate_angle: int,
         orientation: int,
         crop_override: CropResult | None,
-        no_crop: bool,
+        use_auto_crop: bool,
         preview_mode: str,
         auto_detect_rotation: bool = False,
     ):
@@ -43,25 +43,32 @@ class _ThumbnailWorker(QThread):
         self._rotate_angle = rotate_angle
         self._orientation = orientation
         self._crop_override = crop_override
-        self._no_crop = no_crop
+        self._use_auto_crop = use_auto_crop
         self._preview_mode = preview_mode
         self._auto_detect_rotation = auto_detect_rotation
 
     def run(self) -> None:
         try:
             reader = VideoInfoReader()
-            video_info = reader.read_info(Path(self._video_path))
-
-            effective_crop = self._crop_override
-            if effective_crop is None:
-                detected_crop = video_info.crop_result
-                if detected_crop is not None and detected_crop.has_border:
-                    effective_crop = detected_crop
-            effective_crop = VideoInfoReader.normalize_crop_result(
-                effective_crop,
-                int(video_info.width),
-                int(video_info.height),
+            read_crop_override = self._crop_override if self._use_auto_crop else None
+            video_info = reader.read_info(
+                Path(self._video_path),
+                crop_result=read_crop_override,
+                enable_border_detection=self._use_auto_crop,
             )
+
+            effective_crop = None
+            if self._use_auto_crop:
+                effective_crop = self._crop_override
+                if effective_crop is None:
+                    detected_crop = video_info.crop_result
+                    if detected_crop is not None and detected_crop.has_border:
+                        effective_crop = detected_crop
+                effective_crop = VideoInfoReader.normalize_crop_result(
+                    effective_crop,
+                    int(video_info.width),
+                    int(video_info.height),
+                )
 
             # Auto-detect rotation: check if cropped dimensions already match target orientation
             rotate_angle = self._rotate_angle
@@ -77,7 +84,6 @@ class _ThumbnailWorker(QThread):
                 recommended_rotation = 0 if orientation_matches else 90
                 rotate_angle = recommended_rotation
 
-            preview_crop = None if self._no_crop else effective_crop
             if self._preview_mode == "manual_crop":
                 pil_image = reader.generate_preview_frame_image(
                     video_path=self._video_path,
@@ -87,7 +93,7 @@ class _ThumbnailWorker(QThread):
             else:
                 pil_image = reader.generate_thumb_image(
                     video_path=self._video_path,
-                    crop_result=preview_crop,
+                    crop_result=effective_crop,
                     rotate_angle=rotate_angle,
                     orientation=self._orientation,
                 )
@@ -164,7 +170,7 @@ class HomeService(QObject):
         rotate_angle: int,
         orientation: int,
         crop_override: CropResult | None,
-        no_crop: bool,
+        use_auto_crop: bool,
         preview_mode: str,
         auto_detect_rotation: bool = False,
     ) -> None:
@@ -181,7 +187,7 @@ class HomeService(QObject):
             rotate_angle,
             orientation,
             crop_override,
-            no_crop,
+            use_auto_crop,
             preview_mode,
             auto_detect_rotation,
         )
@@ -278,12 +284,13 @@ class HomeService(QObject):
 
     # ── slots (called from QML) ──────────────────────────────────
 
-    @Slot(str, int, bool, "QVariantMap")
+    @Slot(str, int, bool, bool, "QVariantMap")
     def onVideoItemClicked(
         self,
         file_path: str,
         rotation_angle: int,
         is_landscape: bool,
+        use_auto_crop: bool,
         crop_data: dict,
     ) -> None:
         orientation = 0 if is_landscape else 1
@@ -293,17 +300,18 @@ class HomeService(QObject):
             rotation_angle,
             orientation,
             crop_override,
-            no_crop=False,
+            use_auto_crop=use_auto_crop,
             preview_mode="grid",
             auto_detect_rotation=True,
         )
 
-    @Slot(str, int, bool, "QVariantMap")
+    @Slot(str, int, bool, bool, "QVariantMap")
     def onRotatePreview(
         self,
         file_path: str,
         rotation_angle: int,
         is_landscape: bool,
+        use_auto_crop: bool,
         crop_data: dict,
     ) -> None:
         orientation = 0 if is_landscape else 1
@@ -313,26 +321,7 @@ class HomeService(QObject):
             rotation_angle,
             orientation,
             crop_override,
-            no_crop=False,
-            preview_mode="grid",
-        )
-
-    @Slot(str, int, bool, "QVariantMap")
-    def onPreviewOriginal(
-        self,
-        file_path: str,
-        rotation_angle: int,
-        is_landscape: bool,
-        crop_data: dict,
-    ) -> None:
-        orientation = 0 if is_landscape else 1
-        crop_override = self._coerce_crop_result(crop_data)
-        self._generate_thumbnail(
-            file_path,
-            rotation_angle,
-            orientation,
-            crop_override,
-            no_crop=True,
+            use_auto_crop=use_auto_crop,
             preview_mode="grid",
         )
 
@@ -349,6 +338,6 @@ class HomeService(QObject):
             rotation_angle,
             0,
             crop_override,
-            no_crop=True,
+            use_auto_crop=False,
             preview_mode="manual_crop",
         )
