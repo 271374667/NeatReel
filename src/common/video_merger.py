@@ -188,86 +188,27 @@ class VideoMerger:
         signals = get_merge_signals()
 
         # ===== 预处理: 收集裁剪、旋转信息、有效尺寸、帧率和音频采样率 =====
-        preprocessed: list[tuple[CropResult | None, Rotation]] = []
-        effective_dimensions: list[tuple[int, int]] = []
-        source_fps_values: list[float] = []
-        source_audio_rates: list[int] = []
-
-        for video_info in input_files:
-            input_file = video_info.file_path
-            if not input_file.exists():
-                raise FileNotFoundError(f"文件不存在: {input_file}")
-
-            # 复用调用方预先计算的裁剪结果；仅在完全缺失时才再次检测
-            crop_result = video_info.crop_result
-            if crop_result is None and enable_border_detection:
-                crop_result = self._detect_border(input_file)
-            effective_crop = (
-                crop_result
-                if crop_result is not None and crop_result.has_border
-                else None
-            )
-
-            raw_w = video_info.width
-            raw_h = video_info.height
-            video_fps = video_info.fps
-            audio_rate = video_info.audio_sample_rate
-
-            # 仅当调用方没有提供完整元数据时，才回退到 probe。
-            if (
-                raw_w is None
-                or raw_h is None
-                or video_fps is None
-                or video_fps <= 0
-                or audio_rate is None
-            ):
-                with av.open(str(input_file)) as probe_container:
-                    try:
-                        in_video_stream = probe_container.streams.video[0]
-                    except IndexError as exc:
-                        raise ValueError(f"文件缺少视频流: {input_file}") from exc
-
-                    raw_w = int(in_video_stream.width)
-                    raw_h = int(in_video_stream.height)
-                    video_fps = float(
-                        in_video_stream.average_rate or in_video_stream.rate or 30
-                    )
-
-                    try:
-                        in_audio_stream = probe_container.streams.audio[0]
-                        audio_rate = int(in_audio_stream.rate)
-                    except IndexError:
-                        audio_rate = -1
-
-            source_fps_values.append(video_fps)
-            if audio_rate > 0:
-                source_audio_rates.append(audio_rate)
-
-            # 裁剪后的有效尺寸
-            if effective_crop is not None:
-                eff_w, eff_h = effective_crop.width, effective_crop.height
-            else:
-                eff_w, eff_h = raw_w, raw_h
-
-            # 判断是否需要旋转
-            needs_rot = self._needs_rotation(eff_w, eff_h, orientation)
-            if needs_rot:
-                effective_rotation = (
-                    video_info.rotation
-                    if video_info.rotation is not None
-                    else Rotation.ROTATE_90
-                )
-            else:
-                effective_rotation = Rotation.ROTATE_0
-
-            # 旋转后的尺寸
-            if self._rotation_swaps_dimensions(effective_rotation):
-                final_w, final_h = eff_h, eff_w
-            else:
-                final_w, final_h = eff_w, eff_h
-
-            preprocessed.append((effective_crop, effective_rotation))
-            effective_dimensions.append((final_w, final_h))
+        profiles = [
+            self._resolve_input_profile(video_info, orientation, enable_border_detection)
+            for video_info in input_files
+        ]
+        preprocessed: list[tuple[CropResult | None, Rotation]] = [
+            (profile["effective_crop"], profile["effective_rotation"])
+            for profile in profiles
+        ]
+        effective_dimensions: list[tuple[int, int]] = [
+            (profile["final_width"], profile["final_height"])
+            for profile in profiles
+        ]
+        source_fps_values: list[float] = [
+            float(profile["video_fps"])
+            for profile in profiles
+        ]
+        source_audio_rates: list[int] = [
+            int(profile["audio_rate"])
+            for profile in profiles
+            if int(profile["audio_rate"]) > 0
+        ]
 
         # ===== 确定目标帧率和音频采样率 =====
         if target_fps != -1:
@@ -367,7 +308,7 @@ class VideoMerger:
         last_progress_emit = 0.0
         last_display_emit = 0.0
 
-        signals.mergeStarted.emit(len(input_files), effective_fps)
+        signals.mergeStarted.emit(len(input_files), float(effective_fps))
 
         try:
             for file_index, video_info in enumerate(input_files):
@@ -419,6 +360,7 @@ class VideoMerger:
                     file_index + 1,
                     input_file.name,
                     estimated_total_frames if estimated_total_frames > 0 else 0,
+                    float(effective_fps),
                 )
 
                 filter_graph = self._build_filter_graph(
@@ -586,6 +528,384 @@ class VideoMerger:
             signals.mergeError.emit(str(exc))
             logger.exception("合并出错")
         finally:
+            output_container.close()
+
+    def export_separately(
+        self,
+        input_files: Sequence[InputVideoInfo],
+        output_dir: Path,
+        process_mode: VideoProcessMode = VideoProcessMode.BALANCED,
+        enable_border_detection: bool = True,
+        orientation: Orientation = Orientation.VERTICAL,
+        cover_image_path: Path | None = None,
+    ) -> None:
+        if not input_files:
+            raise ValueError("input_files 不能为空")
+        if any(not isinstance(v, InputVideoInfo) for v in input_files):
+            raise TypeError("input_files 的元素类型必须是 InputVideoInfo")
+        if not isinstance(output_dir, Path):
+            raise TypeError("output_dir 类型必须是 pathlib.Path")
+        if not isinstance(process_mode, VideoProcessMode):
+            raise TypeError("process_mode 类型必须是 VideoProcessMode")
+        if not isinstance(enable_border_detection, bool):
+            raise TypeError("enable_border_detection 类型必须是 bool")
+
+        signals = get_merge_signals()
+        profiles = [
+            self._resolve_input_profile(video_info, orientation, enable_border_detection)
+            for video_info in input_files
+        ]
+        output_dir.mkdir(parents=True, exist_ok=True)
+        signals.mergeStarted.emit(len(input_files), 30.0)
+
+        try:
+            for file_index, profile in enumerate(profiles, start=1):
+                if signals.is_cancelled():
+                    raise MergeCancelled("已取消")
+
+                output_file = output_dir / f"{file_index:04d}.mp4"
+                self._export_single_video(
+                    profile=profile,
+                    output_file=output_file,
+                    process_mode=process_mode,
+                    cover_image_path=cover_image_path,
+                    file_index=file_index,
+                    total_files=len(profiles),
+                )
+
+            signals.mergeFinished.emit()
+            logger.info(f"分别输出完成! 输出目录: {output_dir}")
+        except MergeCancelled:
+            signals.mergeError.emit("已取消")
+            logger.info("分别输出已取消")
+        except Exception as exc:
+            signals.mergeError.emit(str(exc))
+            logger.exception("分别输出出错")
+
+    def _resolve_input_profile(
+        self,
+        video_info: InputVideoInfo,
+        orientation: Orientation,
+        enable_border_detection: bool,
+    ) -> dict[str, object]:
+        input_file = video_info.file_path
+        if not input_file.exists():
+            raise FileNotFoundError(f"文件不存在: {input_file}")
+
+        crop_result = video_info.crop_result
+        if crop_result is None and enable_border_detection:
+            crop_result = self._detect_border(input_file)
+        effective_crop = (
+            crop_result
+            if crop_result is not None and crop_result.has_border
+            else None
+        )
+
+        raw_w = video_info.width
+        raw_h = video_info.height
+        video_fps = video_info.fps
+        audio_rate = video_info.audio_sample_rate
+
+        if (
+            raw_w is None
+            or raw_h is None
+            or video_fps is None
+            or video_fps <= 0
+            or audio_rate is None
+        ):
+            with av.open(str(input_file)) as probe_container:
+                try:
+                    in_video_stream = probe_container.streams.video[0]
+                except IndexError as exc:
+                    raise ValueError(f"文件缺少视频流: {input_file}") from exc
+
+                raw_w = int(in_video_stream.width)
+                raw_h = int(in_video_stream.height)
+                video_fps = float(in_video_stream.average_rate or in_video_stream.rate or 30)
+
+                try:
+                    in_audio_stream = probe_container.streams.audio[0]
+                    audio_rate = int(in_audio_stream.rate)
+                except IndexError:
+                    audio_rate = -1
+
+        if effective_crop is not None:
+            eff_w, eff_h = effective_crop.width, effective_crop.height
+        else:
+            eff_w, eff_h = int(raw_w), int(raw_h)
+
+        needs_rot = self._needs_rotation(eff_w, eff_h, orientation)
+        if needs_rot:
+            effective_rotation = (
+                video_info.rotation
+                if video_info.rotation is not None
+                else Rotation.ROTATE_90
+            )
+        else:
+            effective_rotation = Rotation.ROTATE_0
+
+        if self._rotation_swaps_dimensions(effective_rotation):
+            final_w, final_h = eff_h, eff_w
+        else:
+            final_w, final_h = eff_w, eff_h
+
+        return {
+            "video_info": video_info,
+            "input_file": input_file,
+            "effective_crop": effective_crop,
+            "effective_rotation": effective_rotation,
+            "raw_width": int(raw_w),
+            "raw_height": int(raw_h),
+            "final_width": int(final_w),
+            "final_height": int(final_h),
+            "video_fps": float(video_fps),
+            "audio_rate": int(audio_rate),
+        }
+
+    def _export_single_video(
+        self,
+        profile: dict[str, object],
+        output_file: Path,
+        process_mode: VideoProcessMode,
+        cover_image_path: Path | None,
+        file_index: int,
+        total_files: int,
+    ) -> None:
+        signals = get_merge_signals()
+        input_file = Path(profile["input_file"])
+        crop_result = profile["effective_crop"]
+        effective_rotation = profile["effective_rotation"]
+        target_width = int(profile["final_width"])
+        target_height = int(profile["final_height"])
+        source_fps = max(1.0, float(profile["video_fps"]))
+        target_fps_fraction = Fraction(str(source_fps)).limit_denominator(1001)
+        effective_fps = float(target_fps_fraction)
+        video_time_base = Fraction(
+            target_fps_fraction.denominator,
+            target_fps_fraction.numerator,
+        )
+        target_audio_rate = int(profile["audio_rate"]) if int(profile["audio_rate"]) > 0 else 44100
+        audio_time_base = Fraction(1, target_audio_rate)
+
+        logger.info(
+            f"分别输出文件 {file_index}/{total_files}: {input_file} -> {output_file} "
+            f"(fps={effective_fps:.3f}, size={target_width}x{target_height})"
+        )
+
+        mode_cfg = self._MODE_CONFIGS[process_mode]
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_container = av.open(
+            str(output_file),
+            mode="w",
+            options=mode_cfg.get("container_options"),
+        )
+        video_codec = mode_cfg.get("video_codec", "libx264")
+        video_pixel_format = mode_cfg.get("pixel_format", "yuv420p")
+
+        out_video = output_container.add_stream(video_codec, rate=target_fps_fraction)
+        out_video.width = target_width
+        out_video.height = target_height
+        out_video.pix_fmt = video_pixel_format
+        out_video.time_base = video_time_base
+        out_video.thread_type = "AUTO"
+        out_video.codec_context.options = mode_cfg["codec_options"]
+
+        out_audio = output_container.add_stream("aac", rate=target_audio_rate)
+        out_audio.time_base = audio_time_base
+        audio_bitrate = mode_cfg.get("audio_bitrate")
+        if audio_bitrate:
+            out_audio.bit_rate = int(audio_bitrate)
+
+        if cover_image_path is not None:
+            if not isinstance(cover_image_path, Path):
+                raise TypeError("cover_image_path 类型必须是 pathlib.Path 或 None")
+            if not cover_image_path.exists():
+                raise FileNotFoundError(f"封面图片不存在: {cover_image_path}")
+
+            img = Image.open(str(cover_image_path)).convert("RGB")
+            cover_stream = output_container.add_stream("mjpeg")
+            cover_stream.width = img.width
+            cover_stream.height = img.height
+            cover_stream.pix_fmt = "yuvj420p"
+            try:
+                cover_stream.disposition = 0x0400
+            except (AttributeError, TypeError):
+                logger.warning("无法设置 attached_pic disposition")
+
+            cover_frame = av.VideoFrame.from_image(img).reformat(format="yuvj420p")
+            for pkt in cover_stream.encode(cover_frame):
+                pkt.stream = cover_stream
+                output_container.mux(pkt)
+            for pkt in cover_stream.encode():
+                pkt.stream = cover_stream
+                output_container.mux(pkt)
+
+        input_container = av.open(str(input_file))
+        try:
+            try:
+                in_video = input_container.streams.video[0]
+            except IndexError as exc:
+                raise ValueError(f"文件缺少视频流: {input_file}") from exc
+
+            try:
+                in_audio = input_container.streams.audio[0]
+            except IndexError:
+                in_audio = None
+                logger.warning(f"文件缺少音频流，将填充静音: {input_file}")
+
+            in_video.thread_type = "AUTO"
+
+            estimated_total_frames = int(profile["video_info"].total_frames or 0)
+            if estimated_total_frames <= 0:
+                estimated_total_frames = int(in_video.frames or 0)
+            if (
+                estimated_total_frames <= 0
+                and in_video.duration is not None
+                and in_video.time_base is not None
+            ):
+                duration_seconds = float(in_video.duration * in_video.time_base)
+                stream_fps = float(in_video.average_rate or in_video.rate or effective_fps)
+                if duration_seconds > 0 and stream_fps > 0:
+                    estimated_total_frames = int(max(1, round(duration_seconds * stream_fps)))
+
+            signals.fileStarted.emit(
+                file_index,
+                input_file.name,
+                estimated_total_frames if estimated_total_frames > 0 else 0,
+                effective_fps,
+            )
+
+            filter_graph = self._build_filter_graph(
+                in_video,
+                effective_rotation,
+                crop_result,
+                target_width,
+                target_height,
+                None,
+                mode_cfg["scale_flags"],
+                video_pixel_format,
+            )
+
+            resampler = av.AudioResampler(
+                format="fltp",
+                layout="stereo",
+                rate=target_audio_rate,
+            )
+
+            segment_video_frame_count = 0
+            segment_audio_sample_count = 0
+            last_progress_emit = 0.0
+            last_display_emit = 0.0
+
+            def _encode_video_frame(frm):
+                nonlocal segment_video_frame_count
+                frm.pts = segment_video_frame_count
+                frm.time_base = video_time_base
+                segment_video_frame_count += 1
+                for out_packet in out_video.encode(frm):
+                    out_packet.stream = out_video
+                    output_container.mux(out_packet)
+
+            def _encode_audio_frame(frm):
+                nonlocal segment_audio_sample_count
+                frm.pts = segment_audio_sample_count
+                frm.time_base = audio_time_base
+                segment_audio_sample_count += frm.samples
+                for out_packet in out_audio.encode(frm):
+                    out_packet.stream = out_audio
+                    output_container.mux(out_packet)
+
+            demux_streams = [in_video] + ([in_audio] if in_audio else [])
+            for packet in input_container.demux(*demux_streams):
+                if signals.is_cancelled():
+                    raise MergeCancelled("已取消")
+
+                if packet.stream.type == "video":
+                    for frame in packet.decode():
+                        filter_graph["src"].push(frame)
+                        while True:
+                            try:
+                                filtered_frame = filter_graph["sink"].pull()
+                            except (BlockingIOError, EOFError):
+                                break
+
+                            now = monotonic()
+                            if now - last_display_emit >= 0.3:
+                                last_display_emit = now
+                                try:
+                                    qimg = _frame_to_qimage(filtered_frame)
+                                    signals.displayFrameReady.emit(qimg)
+                                except Exception:
+                                    pass
+
+                            _encode_video_frame(filtered_frame)
+
+                        now = monotonic()
+                        if now - last_progress_emit >= 0.3:
+                            last_progress_emit = now
+                            signals.frameProcessed.emit(
+                                segment_video_frame_count,
+                                estimated_total_frames if estimated_total_frames > 0 else 0,
+                            )
+
+                elif packet.stream.type == "audio":
+                    for frame in packet.decode():
+                        for rf in resampler.resample(frame):
+                            _encode_audio_frame(rf)
+
+            filter_graph["src"].push(None)
+            while True:
+                if signals.is_cancelled():
+                    raise MergeCancelled("已取消")
+                try:
+                    filtered_frame = filter_graph["sink"].pull()
+                except (BlockingIOError, EOFError):
+                    break
+                _encode_video_frame(filtered_frame)
+
+            for rf in resampler.resample(None):
+                _encode_audio_frame(rf)
+
+            if in_audio is None and segment_video_frame_count > 0:
+                silence_duration = segment_video_frame_count / effective_fps
+                silence_samples_needed = int(silence_duration * target_audio_rate)
+                samples_per_frame = max(1024, int(out_audio.codec_context.frame_size or 0))
+                silence_buffer = np.zeros((2, samples_per_frame), dtype="float32")
+                full_silence_frames, silence_remainder = divmod(
+                    silence_samples_needed, samples_per_frame
+                )
+
+                for _ in range(full_silence_frames):
+                    silent_frame = av.AudioFrame.from_ndarray(
+                        silence_buffer, format="fltp", layout="stereo"
+                    )
+                    silent_frame.rate = target_audio_rate
+                    _encode_audio_frame(silent_frame)
+
+                if silence_remainder > 0:
+                    silent_frame = av.AudioFrame.from_ndarray(
+                        silence_buffer[:, :silence_remainder],
+                        format="fltp",
+                        layout="stereo",
+                    )
+                    silent_frame.rate = target_audio_rate
+                    _encode_audio_frame(silent_frame)
+
+            for out_packet in out_video.encode():
+                out_packet.stream = out_video
+                output_container.mux(out_packet)
+
+            for out_packet in out_audio.encode():
+                out_packet.stream = out_audio
+                output_container.mux(out_packet)
+
+            signals.fileFinished.emit(file_index)
+            signals.frameProcessed.emit(
+                segment_video_frame_count,
+                estimated_total_frames if estimated_total_frames > 0 else 0,
+            )
+        finally:
+            input_container.close()
             output_container.close()
 
     @staticmethod

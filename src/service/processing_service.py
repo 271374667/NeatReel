@@ -88,6 +88,7 @@ class _MergeWorker(QThread):
         orientation: Orientation,
         cover_path: Path | None,
         output_path: Path,
+        merge_into_one: bool,
     ):
         super().__init__()
         self._video_items = video_items
@@ -95,6 +96,7 @@ class _MergeWorker(QThread):
         self._orientation = orientation
         self._cover_path = cover_path
         self._output_path = output_path
+        self._merge_into_one = merge_into_one
 
     def run(self) -> None:
         signals = get_merge_signals()
@@ -164,14 +166,24 @@ class _MergeWorker(QThread):
                 )
 
             merger = VideoMerger()
-            merger.merge(
-                input_files=input_files,
-                output_file=self._output_path,
-                process_mode=self._process_mode,
-                enable_border_detection=False,
-                orientation=self._orientation,
-                cover_image_path=self._cover_path,
-            )
+            if self._merge_into_one:
+                merger.merge(
+                    input_files=input_files,
+                    output_file=self._output_path,
+                    process_mode=self._process_mode,
+                    enable_border_detection=False,
+                    orientation=self._orientation,
+                    cover_image_path=self._cover_path,
+                )
+            else:
+                merger.export_separately(
+                    input_files=input_files,
+                    output_dir=self._output_path,
+                    process_mode=self._process_mode,
+                    enable_border_detection=False,
+                    orientation=self._orientation,
+                    cover_image_path=self._cover_path,
+                )
         except Exception:
             # All errors/cancellations are already emitted by VideoMerger
             # via MergeSignals. If read_info fails before merge(), emit here.
@@ -201,7 +213,9 @@ class ProcessingService(QObject):
         self._image_provider = image_provider
         self._worker: _MergeWorker | None = None
         self._output_path = OUTPUT_DIR / "output.mp4"
+        self._output_open_path = self._output_path.parent
         self._project_id = ""
+        self._merge_into_one = True
 
         # Elapsed time
         self._elapsed_timer = QTimer(self)
@@ -234,23 +248,31 @@ class ProcessingService(QObject):
 
     # ── slots (called from QML) ──────────────────────────────────
 
-    @Slot(int, bool, str, str, "QVariantList")
+    @Slot(int, bool, int, str, str, "QVariantList")
     def startMerge(
         self,
         process_mode_index: int,
         is_landscape: bool,
+        output_mode_index: int,
         cover_path: str,
         output_directory: str,
         video_items: list,
     ) -> None:
         process_mode = _PROCESS_MODE_MAP.get(process_mode_index, VideoProcessMode.BALANCED)
         orientation = Orientation.HORIZONTAL if is_landscape else Orientation.VERTICAL
+        merge_into_one = output_mode_index == 0
 
         cover = _coerce_local_path(cover_path)
         output_dir = _coerce_local_path(output_directory) or OUTPUT_DIR
         output_dir.mkdir(parents=True, exist_ok=True)
         self._project_id = self._generate_project_id()
-        self._output_path = output_dir / f"{self._project_id}.mp4"
+        self._merge_into_one = merge_into_one
+        if merge_into_one:
+            self._output_path = output_dir / f"{self._project_id}.mp4"
+            self._output_open_path = output_dir
+        else:
+            self._output_path = output_dir / self._project_id
+            self._output_open_path = self._output_path
 
         # Reset state
         self._total_files = 0
@@ -258,6 +280,7 @@ class ProcessingService(QObject):
         self._current_frames = 0
         self._current_total_frames = 0
         self._cumulative_frames = 0
+        self._effective_fps = 30.0
         self._speed_samples.clear()
         self._start_time = monotonic()
 
@@ -276,7 +299,7 @@ class ProcessingService(QObject):
         get_merge_signals().reset()
 
         self._worker = _MergeWorker(
-            video_items, process_mode, orientation, cover, self._output_path
+            video_items, process_mode, orientation, cover, self._output_path, merge_into_one
         )
         self._worker.start()
 
@@ -287,7 +310,7 @@ class ProcessingService(QObject):
 
     @Slot()
     def onOpenOutputDir(self) -> None:
-        output_dir = self._output_path.parent.resolve()
+        output_dir = self._output_open_path.resolve()
         try:
             subprocess.Popen(["explorer", str(output_dir)])
         except Exception:
@@ -300,9 +323,9 @@ class ProcessingService(QObject):
 
     # ── MergeSignals handlers ────────────────────────────────────
 
-    def _on_merge_started(self, total_files: int, effective_fps: int) -> None:
+    def _on_merge_started(self, total_files: int, effective_fps: float) -> None:
         self._total_files = total_files
-        self._effective_fps = max(1, effective_fps)
+        self._effective_fps = max(1.0, float(effective_fps))
         self._completed_files = 0
         self._cumulative_frames = 0
         self._speed_samples.clear()
@@ -312,9 +335,10 @@ class ProcessingService(QObject):
         self.totalCurrentChanged.emit(0)
         self.displayStateChanged.emit(2)  # Normal (show frame)
 
-    def _on_file_started(self, file_index: int, file_name: str, total_frames: int) -> None:
+    def _on_file_started(self, file_index: int, file_name: str, total_frames: int, effective_fps: float) -> None:
         self._current_frames = 0
         self._current_total_frames = max(1, total_frames)
+        self._effective_fps = max(1.0, float(effective_fps))
         self._speed_samples.clear()
         self._cumulative_frames = 0
         self._file_start_time = monotonic()

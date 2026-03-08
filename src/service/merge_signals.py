@@ -14,8 +14,8 @@ class MergeSignals(QObject):
     """Singleton signal hub between VideoMerger (worker thread) and ProcessingService (main thread)."""
 
     # Emitted by VideoMerger
-    mergeStarted = Signal(int, int)          # total_files, effective_fps
-    fileStarted = Signal(int, str, int)      # file_index(1-based), file_name, total_frames
+    mergeStarted = Signal(int, float)        # total_files, effective_fps
+    fileStarted = Signal(int, str, int, float)  # file_index(1-based), file_name, total_frames, effective_fps
     frameProcessed = Signal(int, int)        # current_frames, total_frames
     fileFinished = Signal(int)               # file_index(1-based)
     mergeFinished = Signal()
