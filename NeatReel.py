@@ -6,6 +6,7 @@ from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 
 from src.core.paths import LOGO_FILE
+from src.service.about_service import AboutService
 from src.service.home_service import HomeService
 from src.service.image_provider import ThumbnailImageProvider
 from src.service.processing_service import ProcessingService
@@ -66,6 +67,9 @@ def main(*, debug: bool = DEBUG) -> None:
 
     processing_service = ProcessingService(image_provider)
     engine.rootContext().setContextProperty("processingService", processing_service)
+
+    about_service = AboutService()
+    engine.rootContext().setContextProperty("aboutService", about_service)
 
     load_main_qml(engine, debug=debug)
     app.setApplicationName("NeatReel")
