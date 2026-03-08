@@ -1,5 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Controls.FluentWinUI3
+import QtQuick.Layouts
 import QtQuick.Window
 import "Components"
 import "Windows"
@@ -51,6 +53,153 @@ Window {
         )
     }
 
+    component CompactMenuButton: Button {
+        id: menuButton
+        flat: true
+        implicitWidth: Math.max(64, contentItem.implicitWidth + leftPadding + rightPadding)
+        implicitHeight: 28
+        leftPadding: 10
+        rightPadding: 10
+        topPadding: 4
+        bottomPadding: 4
+
+        background: Rectangle {
+            radius: 6
+            color: menuButton.down ? "#dbeafe" : (menuButton.hovered ? "#eef4fb" : "transparent")
+        }
+
+        contentItem: Text {
+            text: menuButton.text
+            font.pixelSize: 13
+            font.family: "Microsoft YaHei UI"
+            font.weight: Font.Medium
+            color: "#1f2328"
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            renderType: Text.NativeRendering
+        }
+    }
+
+    Rectangle {
+        id: compactMenuBar
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 34
+        color: "#f7f8fa"
+        z: 20
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 1
+            color: "#d8dee6"
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
+            spacing: 2
+
+            CompactMenuButton {
+                id: settingsMenuButton
+                text: "设置(S)"
+                onClicked: {
+                    settingsMenu.x = x
+                    settingsMenu.y = compactMenuBar.height - 1
+                    settingsMenu.open()
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+        }
+    }
+
+    Menu {
+        id: settingsMenu
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnReleaseOutside
+
+        MenuItem {
+            text: "关于"
+            onTriggered: aboutDialog.open()
+        }
+    }
+
+    Dialog {
+        id: aboutDialog
+        parent: root.contentItem
+        modal: true
+        anchors.centerIn: parent
+        width: 420
+        title: "关于"
+        standardButtons: Dialog.Ok
+
+        contentItem: ColumnLayout {
+            spacing: 16
+
+            RowLayout {
+                spacing: 12
+
+                Rectangle {
+                    Layout.preferredWidth: 56
+                    Layout.preferredHeight: 56
+                    radius: 14
+                    color: "#f4f8ff"
+
+                    Image {
+                        anchors.centerIn: parent
+                        source: "Images/SmallLogo.png"
+                        sourceSize.width: 32
+                        sourceSize.height: 32
+                        fillMode: Image.PreserveAspectFit
+                    }
+                }
+
+                ColumnLayout {
+                    spacing: 2
+
+                    Text {
+                        text: "净影连 NeatReel"
+                        font.pixelSize: 20
+                        font.family: "Microsoft YaHei UI"
+                        font.weight: Font.DemiBold
+                        color: "#111827"
+                        renderType: Text.NativeRendering
+                    }
+
+                    Text {
+                        text: "FluentWinUI3 菜单栏"
+                        font.pixelSize: 13
+                        font.family: "Microsoft YaHei UI"
+                        color: "#667085"
+                        renderType: Text.NativeRendering
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                color: "#e6ebf1"
+            }
+
+            Text {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "净影连用于批量裁剪、旋转和合并视频。顶部采用紧凑菜单栏，设置菜单中提供关于入口。"
+                font.pixelSize: 14
+                font.family: "Microsoft YaHei UI"
+                color: "#344054"
+                lineHeight: 1.4
+                renderType: Text.NativeRendering
+            }
+        }
+    }
+
     Connections {
         target: homeService
 
@@ -73,7 +222,10 @@ Window {
     }
 
     Item {
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: compactMenuBar.bottom
+        anchors.bottom: parent.bottom
 
         Home {
             id: homePage

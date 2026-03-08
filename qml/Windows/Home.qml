@@ -205,7 +205,10 @@ Item {
     RowLayout {
         id: mainLayout
         anchors.fill: parent
-        anchors.margins: 12
+        anchors.leftMargin: 12
+        anchors.rightMargin: 12
+        anchors.bottomMargin: 12
+        anchors.topMargin: 8
         spacing: 12
 
         // ════════════════════════════════════════════════════
