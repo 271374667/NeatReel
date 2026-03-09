@@ -160,6 +160,7 @@ Item {
             items.push({
                 filePath: it.filePath,
                 rotation: it.rotation,
+                manualRotationEdited: it.manualRotationEdited === undefined ? false : !!it.manualRotationEdited,
                 autoCropEnabled: it.autoCropEnabled === undefined ? true : !!it.autoCropEnabled,
                 manualCropEnabled: !!it.manualCropEnabled,
                 manualCropX: Number(it.manualCropX || 0),
@@ -172,16 +173,27 @@ Item {
     }
 
     // ── 获取和更新旋转角度 ──
-    function setItemRotation(idx, angle) {
+    function setItemRotation(idx, angle, manualEdited) {
         if (idx >= 0 && idx < videoModel.count) {
             videoModel.setProperty(idx, "rotation", angle);
+            if (manualEdited !== undefined) {
+                videoModel.setProperty(idx, "manualRotationEdited", !!manualEdited);
+            }
         }
     }
     function getItemRotation(idx) {
         if (idx >= 0 && idx < videoModel.count) {
             return videoModel.get(idx).rotation;
         }
-        return 90;
+        return 0;
+    }
+
+    function getItemManualRotationEdited(idx) {
+        if (idx >= 0 && idx < videoModel.count) {
+            var item = videoModel.get(idx);
+            return item.manualRotationEdited === undefined ? false : !!item.manualRotationEdited;
+        }
+        return false;
     }
 
     function setItemAutoCropEnabled(idx, enabled) {
@@ -255,6 +267,7 @@ Item {
             items.push({
                 filePath: it.filePath,
                 rotation: it.rotation,
+                manualRotationEdited: it.manualRotationEdited === undefined ? false : !!it.manualRotationEdited,
                 autoCropEnabled: it.autoCropEnabled === undefined ? true : !!it.autoCropEnabled,
                 manualCropEnabled: !!it.manualCropEnabled,
                 manualCropX: Number(it.manualCropX || 0),
@@ -305,6 +318,7 @@ Item {
             videoModel.append({
                 filePath: items[j].filePath,
                 rotation: items[j].rotation,
+                manualRotationEdited: items[j].manualRotationEdited,
                 autoCropEnabled: items[j].autoCropEnabled,
                 manualCropEnabled: items[j].manualCropEnabled,
                 manualCropX: items[j].manualCropX,
@@ -361,7 +375,8 @@ Item {
             path = decodeURIComponent(path);
             videoModel.append({
                 filePath: path,
-                rotation: 90,
+                rotation: 0,
+                manualRotationEdited: false,
                 autoCropEnabled: root.defaultAutoCropEnabled,
                 manualCropEnabled: false,
                 manualCropX: 0,
@@ -692,6 +707,7 @@ Item {
                                     root.leftclicked({
                                         "filePath": delegateRoot.filePath,
                                         "rotation": delegateRoot.rotation,
+                                        "manualRotationEdited": root.getItemManualRotationEdited(delegateRoot.index),
                                         "autoCropEnabled": root.getItemAutoCropEnabled(delegateRoot.index)
                                     });
                                 }

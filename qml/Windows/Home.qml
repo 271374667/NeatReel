@@ -23,6 +23,8 @@ Item {
     property bool globalAutoCropEnabled: true
     property int previewDisplayState: DisplayScreen.State.Waiting
     property var currentCropRect: ({})
+    property int selectedManualRotationAngle: 0
+    property bool selectedManualRotationEdited: false
     property string defaultOutputDirectory: homeService.defaultOutputDirectory
     property string outputDirectory: defaultOutputDirectory
     readonly property string currentFilePath: videoInfoItem.filePath
@@ -75,9 +77,6 @@ Item {
 
         function onRecommendedRotationReady(angle) {
             videoInfoItem.rotationAngle = angle
-            if (typeof dropList !== "undefined" && dropList.currentIndex >= 0) {
-                dropList.setItemRotation(dropList.currentIndex, angle)
-            }
         }
 
         function onErrorOccurred(message) {
@@ -112,15 +111,26 @@ Item {
         showingOriginal = !currentAutoCropEnabled()
     }
 
+    function normalizeStoredRotation(angle, manualEdited) {
+        const normalized = ((Number(angle || 0) % 360) + 360) % 360
+        if (manualEdited)
+            return normalized
+        return (normalized === 90 || normalized === 270) ? 90 : 0
+    }
+
     function refreshSelectedPreview(autoDetectRotation) {
         if (!videoInfoItem.filePath)
             return
 
         var useAutoCrop = currentAutoCropEnabled()
+        var manualRotation = normalizeStoredRotation(
+            selectedManualRotationAngle,
+            selectedManualRotationEdited
+        )
         if (autoDetectRotation) {
             homeService.onVideoItemClicked(
                 videoInfoItem.filePath,
-                videoInfoItem.rotationAngle,
+                manualRotation,
                 landscapeRadio.checked,
                 useAutoCrop,
                 currentManualCropPayload()
@@ -130,7 +140,7 @@ Item {
 
         homeService.onRotatePreview(
             videoInfoItem.filePath,
-            videoInfoItem.rotationAngle,
+            manualRotation,
             landscapeRadio.checked,
             useAutoCrop,
             currentManualCropPayload()
@@ -154,16 +164,17 @@ Item {
         showingOriginal = false
 
         if (videoInfoItem.filePath) {
-            refreshSelectedPreview(false)
+            refreshSelectedPreview(true)
         }
     }
 
     function updateRotationAngle(delta) {
-        const current = ((videoInfoItem.rotationAngle % 360) + 360) % 360
+        const current = ((selectedManualRotationAngle % 360) + 360) % 360
         var newAngle = (current + delta + 360) % 360
-        videoInfoItem.rotationAngle = newAngle
+        selectedManualRotationAngle = newAngle
+        selectedManualRotationEdited = true
         if (typeof dropList !== "undefined" && dropList.currentIndex >= 0) {
-            dropList.setItemRotation(dropList.currentIndex, newAngle)
+            dropList.setItemRotation(dropList.currentIndex, newAngle, true)
         }
     }
 
@@ -240,11 +251,16 @@ Item {
                         var parts = pathStr.split("/")
                         videoInfoItem.fileName = parts[parts.length - 1]
                         if (data.rotation !== undefined) {
-                            videoInfoItem.rotationAngle = data.rotation
+                            root.selectedManualRotationEdited = !!data.manualRotationEdited
+                            root.selectedManualRotationAngle = root.normalizeStoredRotation(
+                                data.rotation,
+                                root.selectedManualRotationEdited
+                            )
+                            videoInfoItem.rotationAngle = root.selectedManualRotationAngle
                         }
                         homeService.onVideoItemClicked(
                             data.filePath,
-                            videoInfoItem.rotationAngle,
+                            root.selectedManualRotationAngle,
                             landscapeRadio.checked,
                             data.autoCropEnabled !== false,
                             dropList.getItemManualCrop(dropList.currentIndex)
@@ -259,6 +275,8 @@ Item {
                         videoInfoItem.fileName = ""
                         videoInfoItem.filePath = ""
                         videoInfoItem.durationAndResolution = ""
+                        root.selectedManualRotationEdited = false
+                        root.selectedManualRotationAngle = 0
                         videoInfoItem.rotationAngle = 0
                         displayScreen.setWaiting()
                     }
@@ -327,7 +345,7 @@ Item {
                                         var nextUseAutoCrop = !root.currentAutoCropEnabled()
                                         dropList.setItemAutoCropEnabled(dropList.currentIndex, nextUseAutoCrop)
                                         root.showingOriginal = !nextUseAutoCrop
-                                        root.refreshSelectedPreview(false)
+                                        root.refreshSelectedPreview(true)
                                     }
                                 }
                                 HandCursor {}
@@ -357,7 +375,7 @@ Item {
                                     root.beginTopActionButtonsDebounce()
                                     root.updateRotationAngle(90)
                                     if (videoInfoItem.filePath) {
-                                        root.refreshSelectedPreview(false)
+                                        root.refreshSelectedPreview(true)
                                     }
                                 }
                                 HandCursor {}
@@ -372,7 +390,7 @@ Item {
                                     root.beginTopActionButtonsDebounce()
                                     root.updateRotationAngle(-90)
                                     if (videoInfoItem.filePath) {
-                                        root.refreshSelectedPreview(false)
+                                        root.refreshSelectedPreview(true)
                                     }
                                 }
                                 HandCursor {}
@@ -579,7 +597,7 @@ Item {
                                                 dropList.setAllItemsAutoCropEnabled(checked)
                                                 if (videoInfoItem.filePath) {
                                                     root.showingOriginal = !checked
-                                                    root.refreshSelectedPreview(false)
+                                                    root.refreshSelectedPreview(true)
                                                 }
                                             }
                                         }

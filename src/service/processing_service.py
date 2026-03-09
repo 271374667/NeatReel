@@ -39,6 +39,13 @@ _PROCESS_MODE_MAP = {
 }
 
 
+def _normalize_rotation_for_merge(angle: int, manually_edited: bool) -> int:
+    normalized = int(angle) % 360
+    if manually_edited:
+        return normalized
+    return 90 if normalized in (90, 270) else 0
+
+
 def _format_elapsed(seconds: float) -> str:
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
@@ -150,7 +157,10 @@ class _MergeWorker(QThread):
 
             input_files: list[InputVideoInfo] = []
             for item, info, effective_crop in results:
-                angle = int(item.get("rotation", 0)) % 360
+                angle = _normalize_rotation_for_merge(
+                    int(item.get("rotation", 0)),
+                    bool(item.get("manualRotationEdited", False)),
+                )
                 rotation = _ROTATION_MAP.get(angle, Rotation.ROTATE_0)
                 input_files.append(
                     InputVideoInfo(

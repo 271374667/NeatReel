@@ -27,7 +27,7 @@ Item {
     property string fileName: ""                     // 文件名
     property string filePath: ""                     // 文件路径
     property string durationAndResolution: ""        // 总时长 / 原始分辨率
-    property int rotationAngle: 90                 // 相对于原视频顺时针旋转角度
+    property int rotationAngle: 0                 // 相对于原视频顺时针旋转角度
 
     // ── 样式属性 ──
     property real  cornerRadius: 8

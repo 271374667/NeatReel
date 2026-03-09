@@ -19,6 +19,34 @@ def _format_duration(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d}"
 
 
+def _normalize_rotation_angle(angle: int) -> int:
+    return int(angle) % 360
+
+
+def _rotation_swaps_dimensions(angle: int) -> bool:
+    return _normalize_rotation_angle(angle) in (90, 270)
+
+
+def _resolve_effective_rotation(
+    base_rotation: int,
+    width: int,
+    height: int,
+    orientation: int,
+) -> int:
+    normalized_base = _normalize_rotation_angle(base_rotation)
+    effective_width = int(width)
+    effective_height = int(height)
+    if _rotation_swaps_dimensions(normalized_base):
+        effective_width, effective_height = effective_height, effective_width
+
+    if orientation == 0:
+        orientation_matches = effective_width >= effective_height
+    else:
+        orientation_matches = effective_height > effective_width
+
+    return normalized_base if orientation_matches else (normalized_base + 90) % 360
+
+
 # ── thumbnail worker ─────────────────────────────────────────────
 class _ThumbnailWorker(QThread):
     """Background thread: read_info + generate_thumb_image."""
@@ -71,17 +99,17 @@ class _ThumbnailWorker(QThread):
                 )
 
             # Auto-detect rotation: check if cropped dimensions already match target orientation
-            rotate_angle = self._rotate_angle
+            rotate_angle = _normalize_rotation_angle(self._rotate_angle)
             recommended_rotation = None
             if self._auto_detect_rotation:
                 eff_w = effective_crop.width if effective_crop is not None else video_info.width
                 eff_h = effective_crop.height if effective_crop is not None else video_info.height
-                # orientation: 0=landscape (width>=height), 1=portrait (height>width)
-                if self._orientation == 0:
-                    orientation_matches = eff_w >= eff_h
-                else:
-                    orientation_matches = eff_h > eff_w
-                recommended_rotation = 0 if orientation_matches else 90
+                recommended_rotation = _resolve_effective_rotation(
+                    rotate_angle,
+                    eff_w,
+                    eff_h,
+                    self._orientation,
+                )
                 rotate_angle = recommended_rotation
 
             if self._preview_mode == "manual_crop":

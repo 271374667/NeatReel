@@ -634,20 +634,20 @@ class VideoMerger:
         else:
             eff_w, eff_h = int(raw_w), int(raw_h)
 
-        needs_rot = self._needs_rotation(eff_w, eff_h, orientation)
-        if needs_rot:
-            effective_rotation = (
-                video_info.rotation
-                if video_info.rotation is not None
-                else Rotation.ROTATE_90
-            )
-        else:
-            effective_rotation = Rotation.ROTATE_0
-
-        if self._rotation_swaps_dimensions(effective_rotation):
-            final_w, final_h = eff_h, eff_w
-        else:
-            final_w, final_h = eff_w, eff_h
+        manual_rotation = self._normalize_rotation(video_info.rotation)
+        manual_w, manual_h = self._dimensions_after_rotation(
+            eff_w,
+            eff_h,
+            manual_rotation,
+        )
+        needs_rot = self._needs_rotation(manual_w, manual_h, orientation)
+        auto_rotation = Rotation.ROTATE_90 if needs_rot else Rotation.ROTATE_0
+        effective_rotation = self._compose_rotation(manual_rotation, auto_rotation)
+        final_w, final_h = self._dimensions_after_rotation(
+            eff_w,
+            eff_h,
+            effective_rotation,
+        )
 
         return {
             "video_info": video_info,
@@ -933,6 +933,29 @@ class VideoMerger:
     @staticmethod
     def _rotation_swaps_dimensions(rotation: Rotation) -> bool:
         return rotation in (Rotation.ROTATE_90, Rotation.ROTATE_270)
+
+    @staticmethod
+    def _normalize_rotation(rotation: Rotation | None) -> Rotation:
+        if rotation is None:
+            return Rotation.ROTATE_0
+        return Rotation(int(rotation.value) % 360)
+
+    @classmethod
+    def _compose_rotation(cls, base: Rotation | None, delta: Rotation | None) -> Rotation:
+        total = cls._normalize_rotation(base).value + cls._normalize_rotation(delta).value
+        return Rotation(total % 360)
+
+    @classmethod
+    def _dimensions_after_rotation(
+        cls,
+        width: int,
+        height: int,
+        rotation: Rotation | None,
+    ) -> tuple[int, int]:
+        normalized = cls._normalize_rotation(rotation)
+        if cls._rotation_swaps_dimensions(normalized):
+            return int(height), int(width)
+        return int(width), int(height)
 
     @staticmethod
     def _get_most_compatible_resolution(
