@@ -242,7 +242,7 @@ class VideoMerger:
                 )
         else:
             target_width, target_height = self._get_most_compatible_resolution(
-                effective_dimensions
+                effective_dimensions,
             )
 
         logger.info(f"目标分辨率: {target_width}x{target_height}")
@@ -966,16 +966,36 @@ class VideoMerger:
     def _get_most_compatible_resolution(
         effective_dimensions: list[tuple[int, int]],
     ) -> tuple[int, int]:
-        """根据所有视频的有效尺寸，选择最兼容的分辨率（最常见宽高比中最大的）。"""
-        aspect_ratios = [round(w / h, 4) for w, h in effective_dimensions]
-        most_common_ratio = Counter(aspect_ratios).most_common(1)[0][0]
-        compatible = [
-            dim
-            for dim, ratio in zip(effective_dimensions, aspect_ratios)
-            if ratio == most_common_ratio
-        ]
-        compatible.sort(key=lambda x: x[0] * x[1], reverse=True)
-        return compatible[0]
+        """
+        根据所有视频的有效尺寸选择目标分辨率。
+
+        规则：
+        1. 优先选择“明确多数”的宽高比。
+        2. 在该宽高比下，选择面积最大的分辨率。
+        3. 若不存在明确多数（例如 1:1:1 或 2:2 平票），直接选择全体中面积最大的分辨率。
+        """
+        if not effective_dimensions:
+            raise ValueError("effective_dimensions 不能为空")
+
+        normalized_dimensions = [(int(w), int(h)) for w, h in effective_dimensions]
+        aspect_ratios = [round(w / h, 4) for w, h in normalized_dimensions]
+        ratio_counts = Counter(aspect_ratios).most_common()
+
+        selected_dimensions = normalized_dimensions
+        if ratio_counts:
+            top_ratio, top_count = ratio_counts[0]
+            has_strict_majority = (
+                len(ratio_counts) == 1 or top_count > ratio_counts[1][1]
+            )
+            if has_strict_majority and top_count > 1:
+                selected_dimensions = [
+                    dim
+                    for dim, ratio in zip(normalized_dimensions, aspect_ratios)
+                    if ratio == top_ratio
+                ]
+
+        selected_dimensions.sort(key=lambda x: x[0] * x[1], reverse=True)
+        return selected_dimensions[0]
 
     @staticmethod
     def _build_filter_graph(
