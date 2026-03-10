@@ -98,10 +98,13 @@ class _ThumbnailWorker(QThread):
                     int(video_info.height),
                 )
 
-            # Auto-detect rotation: check if cropped dimensions already match target orientation
             rotate_angle = _normalize_rotation_angle(self._rotate_angle)
             recommended_rotation = None
-            if self._auto_detect_rotation:
+            if self._preview_mode == "manual_crop":
+                # Manual crop must always use the original, unrotated frame so the
+                # crop box and emitted coordinates stay in source-video space.
+                rotate_angle = 0
+            elif self._auto_detect_rotation:
                 eff_w = effective_crop.width if effective_crop is not None else video_info.width
                 eff_h = effective_crop.height if effective_crop is not None else video_info.height
                 recommended_rotation = _resolve_effective_rotation(
