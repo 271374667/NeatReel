@@ -8,7 +8,7 @@ from PySide6.QtGui import QImage
 
 from src.common.video_info_reader import VideoInfoReader, CropResult
 from src.core.paths import OUTPUT_DIR
-from src.service.image_provider import ThumbnailImageProvider, pil_to_qimage
+from src.image_provider import ThumbnailImageProvider, pil_to_qimage
 
 
 # ── helpers ──────────────────────────────────────────────────────

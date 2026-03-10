@@ -17,7 +17,7 @@ from loguru import logger
 from PySide6.QtGui import QImage
 
 from src.common.video_info_reader import VideoInfoReader, CropResult
-from src.service.merge_signals import MergeCancelled, get_merge_signals
+from src.merge_signals import MergeCancelled, get_merge_signals
 from dataclasses import dataclass
 
 logger.remove()

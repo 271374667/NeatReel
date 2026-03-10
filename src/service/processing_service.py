@@ -19,8 +19,8 @@ from src.common.video_merger import (
     VideoProcessMode,
 )
 from src.core.paths import OUTPUT_DIR
-from src.service.image_provider import ThumbnailImageProvider
-from src.service.merge_signals import get_merge_signals
+from src.image_provider import ThumbnailImageProvider
+from src.merge_signals import get_merge_signals
 
 
 # ── helpers ──────────────────────────────────────────────────────
