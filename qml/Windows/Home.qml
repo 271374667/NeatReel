@@ -77,6 +77,11 @@ Item {
 
         function onRecommendedRotationReady(angle) {
             videoInfoItem.rotationAngle = angle
+            // 同步内部旋转状态，确保后续手动旋转以自动检测的角度为基准
+            root.selectedManualRotationAngle = angle
+            if (typeof dropList !== "undefined" && dropList.currentIndex >= 0) {
+                dropList.setItemRotation(dropList.currentIndex, angle, false)
+            }
         }
 
         function onErrorOccurred(message) {
@@ -127,22 +132,14 @@ Item {
             selectedManualRotationAngle,
             selectedManualRotationEdited
         )
-        if (autoDetectRotation) {
-            homeService.onVideoItemClicked(
-                videoInfoItem.filePath,
-                manualRotation,
-                landscapeRadio.checked,
-                useAutoCrop,
-                currentManualCropPayload()
-            )
-            return
-        }
-
-        homeService.onRotatePreview(
+        // 统一走 onVideoItemClicked，由后端根据 manuallyEdited 决定是否自动检测旋转
+        var manuallyEdited = selectedManualRotationEdited || !autoDetectRotation
+        homeService.onVideoItemClicked(
             videoInfoItem.filePath,
             manualRotation,
             landscapeRadio.checked,
             useAutoCrop,
+            manuallyEdited,
             currentManualCropPayload()
         )
     }
@@ -263,6 +260,7 @@ Item {
                             root.selectedManualRotationAngle,
                             landscapeRadio.checked,
                             data.autoCropEnabled !== false,
+                            root.selectedManualRotationEdited,
                             dropList.getItemManualCrop(dropList.currentIndex)
                         )
                     }
@@ -375,7 +373,7 @@ Item {
                                     root.beginTopActionButtonsDebounce()
                                     root.updateRotationAngle(90)
                                     if (videoInfoItem.filePath) {
-                                        root.refreshSelectedPreview(true)
+                                        root.refreshSelectedPreview(false)
                                     }
                                 }
                                 HandCursor {}
@@ -390,7 +388,7 @@ Item {
                                     root.beginTopActionButtonsDebounce()
                                     root.updateRotationAngle(-90)
                                     if (videoInfoItem.filePath) {
-                                        root.refreshSelectedPreview(true)
+                                        root.refreshSelectedPreview(false)
                                     }
                                 }
                                 HandCursor {}

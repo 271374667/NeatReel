@@ -42,6 +42,7 @@ class InputVideoInfo:
     fps: float | None = None
     audio_sample_rate: int | None = None
     total_frames: int | None = None
+    manually_edited: bool = False
 
 
 class Orientation(Enum):
@@ -635,14 +636,18 @@ class VideoMerger:
             eff_w, eff_h = int(raw_w), int(raw_h)
 
         manual_rotation = self._normalize_rotation(video_info.rotation)
-        manual_w, manual_h = self._dimensions_after_rotation(
-            eff_w,
-            eff_h,
-            manual_rotation,
-        )
-        needs_rot = self._needs_rotation(manual_w, manual_h, orientation)
-        auto_rotation = Rotation.ROTATE_90 if needs_rot else Rotation.ROTATE_0
-        effective_rotation = self._compose_rotation(manual_rotation, auto_rotation)
+        if video_info.manually_edited:
+            # User explicitly set rotation — use it directly, no auto-rotation
+            effective_rotation = manual_rotation
+        else:
+            manual_w, manual_h = self._dimensions_after_rotation(
+                eff_w,
+                eff_h,
+                manual_rotation,
+            )
+            needs_rot = self._needs_rotation(manual_w, manual_h, orientation)
+            auto_rotation = Rotation.ROTATE_90 if needs_rot else Rotation.ROTATE_0
+            effective_rotation = self._compose_rotation(manual_rotation, auto_rotation)
         final_w, final_h = self._dimensions_after_rotation(
             eff_w,
             eff_h,

@@ -157,9 +157,10 @@ class _MergeWorker(QThread):
 
             input_files: list[InputVideoInfo] = []
             for item, info, effective_crop in results:
+                manually_edited = bool(item.get("manualRotationEdited", False))
                 angle = _normalize_rotation_for_merge(
                     int(item.get("rotation", 0)),
-                    bool(item.get("manualRotationEdited", False)),
+                    manually_edited,
                 )
                 rotation = _ROTATION_MAP.get(angle, Rotation.ROTATE_0)
                 input_files.append(
@@ -172,6 +173,7 @@ class _MergeWorker(QThread):
                         fps=info.fps,
                         audio_sample_rate=info.audio_sample_rate,
                         total_frames=info.total_frames,
+                        manually_edited=manually_edited,
                     )
                 )
 

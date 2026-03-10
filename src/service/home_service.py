@@ -312,13 +312,14 @@ class HomeService(QObject):
 
     # ── slots (called from QML) ──────────────────────────────────
 
-    @Slot(str, int, bool, bool, "QVariantMap")
+    @Slot(str, int, bool, bool, bool, "QVariantMap")
     def onVideoItemClicked(
         self,
         file_path: str,
         rotation_angle: int,
         is_landscape: bool,
         use_auto_crop: bool,
+        manually_edited: bool,
         crop_data: dict,
     ) -> None:
         orientation = 0 if is_landscape else 1
@@ -330,7 +331,7 @@ class HomeService(QObject):
             crop_override,
             use_auto_crop=use_auto_crop,
             preview_mode="grid",
-            auto_detect_rotation=True,
+            auto_detect_rotation=not manually_edited,
         )
 
     @Slot(str, int, bool, bool, "QVariantMap")
