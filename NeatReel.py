@@ -9,7 +9,7 @@ from src.common.single_instance_guard import NeatReelSingleInstanceGuard
 from src.core.paths import LOGO_FILE
 from src.service.about_service import AboutService
 from src.service.home_service import HomeService
-from src.service.image_provider import ThumbnailImageProvider
+from src.image_provider import ThumbnailImageProvider
 from src.service.processing_service import ProcessingService
 
 DEBUG: bool = False
