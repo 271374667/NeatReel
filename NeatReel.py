@@ -5,6 +5,7 @@ from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 
+from src.common.single_instance_guard import NeatReelSingleInstanceGuard
 from src.core.paths import LOGO_FILE
 from src.service.about_service import AboutService
 from src.service.home_service import HomeService
@@ -52,6 +53,10 @@ def load_main_qml(engine: QQmlApplicationEngine, *, debug: bool) -> None:
 
 
 def main(*, debug: bool = DEBUG) -> None:
+    instance_guard = NeatReelSingleInstanceGuard()
+    if instance_guard.has_running_instance():
+        instance_guard.show_warning_and_exit()
+
     app = QGuiApplication(sys.argv)
 
 
