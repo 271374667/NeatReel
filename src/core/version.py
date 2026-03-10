@@ -2,22 +2,23 @@ import json
 import urllib.request
 import urllib.error
 
-__version__ = "1.8.0"
+__version__ = "v1.18.15"
+
 
 class VersionHandler:
     GITHUB_API_URL = "https://api.github.com/repos/271374667/NeatReel/releases"
-    
+
     @staticmethod
     def _parse_version(v_str: str) -> tuple:
         """
         将版本号字符串（如 'v1.3.2'）解析为元组 (1, 3, 2) 以便进行比较。
         忽略非纯数字后缀。
         """
-        clean_v = v_str.lstrip('vV')
+        clean_v = v_str.lstrip("vV")
         parts = []
-        for part in clean_v.split('.'):
+        for part in clean_v.split("."):
             # 提取数字部分
-            num_part = ''.join(filter(str.isdigit, part))
+            num_part = "".join(filter(str.isdigit, part))
             if num_part:
                 parts.append(int(num_part))
             else:
@@ -68,7 +69,7 @@ class VersionHandler:
         except Exception as e:
             print(f"检测更新时发生错误: {e}")
             return [], str(e)
-        
+
     @classmethod
     def check_for_updates(cls) -> list[dict[str, str]]:
         """
@@ -78,3 +79,19 @@ class VersionHandler:
         """
         updates, _ = cls.check_for_updates_detailed()
         return updates
+
+
+if __name__ == "__main__":
+    v = VersionHandler()
+    print("当前版本:", v.get_current_version())
+    updates, error = v.check_for_updates_detailed()
+    if error:
+        print("检查更新时发生错误:", error)
+    else:
+        if updates:
+            print("发现新版本:")
+            for update in updates:
+                for version, details in update.items():
+                    print(f"版本 {version}:\n{details}\n")
+        else:
+            print("当前已是最新版本。")
