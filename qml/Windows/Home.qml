@@ -128,12 +128,12 @@ Item {
             return
 
         var useAutoCrop = currentAutoCropEnabled()
-        var manualRotation = normalizeStoredRotation(
-            selectedManualRotationAngle,
-            selectedManualRotationEdited
-        )
-        // 统一走 onVideoItemClicked，由后端根据 manuallyEdited 决定是否自动检测旋转
         var manuallyEdited = selectedManualRotationEdited || !autoDetectRotation
+        // 当自动检测旋转时且用户未手动编辑，使用 0° 作为基准角度，
+        // 避免上一次自动检测的结果累加到下一次自动检测中
+        var manualRotation = manuallyEdited
+            ? normalizeStoredRotation(selectedManualRotationAngle, selectedManualRotationEdited)
+            : 0
         homeService.onVideoItemClicked(
             videoInfoItem.filePath,
             manualRotation,
@@ -255,9 +255,12 @@ Item {
                             )
                             videoInfoItem.rotationAngle = root.selectedManualRotationAngle
                         }
+                        // 未手动编辑时，发送 0° 让后端自动检测，避免旧的自动检测结果累加
+                        var angleToSend = root.selectedManualRotationEdited
+                            ? root.selectedManualRotationAngle : 0
                         homeService.onVideoItemClicked(
                             data.filePath,
-                            root.selectedManualRotationAngle,
+                            angleToSend,
                             landscapeRadio.checked,
                             data.autoCropEnabled !== false,
                             root.selectedManualRotationEdited,
