@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F00BC"/>
+      <stop offset="100%" stop-color="#9B00E8"/>
+    </linearGradient>
+
+    <linearGradient id="waveCyan" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00C6FF"/>
+      <stop offset="100%" stop-color="#0072FF"/>
+    </linearGradient>
+
+    <linearGradient id="playWhite" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E2E8F0"/>
+    </linearGradient>
+
+    <clipPath id="squircle">
+      <rect x="16" y="16" width="224" height="224" rx="52" />
+    </clipPath>
+
+    <filter id="fluentShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.25"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <g clip-path="url(#squircle)">
+    
+    <rect x="16" y="16" width="224" height="224" fill="url(#bgPurple)" />
+
+    <path d="M -20 256 C 80 256, 120 80, 276 0 L 276 276 L -20 276 Z" fill="url(#waveCyan)" />
+
+    <path d="M -20 256 C 80 256, 120 80, 276 0" stroke="#FFFFFF" stroke-width="2" stroke-opacity="0.4" fill="none" />
+  
+  </g>
+
+  <g filter="url(#fluentShadow)">
+    <path d="M 104 88 L 176 128 L 104 168 Z" fill="url(#playWhite)" stroke="url(#playWhite)" stroke-width="20" stroke-linejoin="round" />
+  </g>
+
+</svg>
