@@ -217,6 +217,15 @@ Item {
         }
     }
 
+    function resetAutoDetectedRotations() {
+        for (var i = 0; i < videoModel.count; i++) {
+            var item = videoModel.get(i);
+            if (!item.manualRotationEdited) {
+                videoModel.setProperty(i, "rotation", 0);
+            }
+        }
+    }
+
     function setItemManualCrop(idx, cropInfo) {
         if (idx < 0 || idx >= videoModel.count || !cropInfo)
             return;

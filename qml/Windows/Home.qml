@@ -449,6 +449,10 @@ Item {
                                 enabled: !root.orientationDebouncing
                                 onClicked: {
                                     root.beginOrientationDebounce()
+                                    dropList.resetAutoDetectedRotations()
+                                    if (!root.selectedManualRotationEdited) {
+                                        root.selectedManualRotationAngle = 0
+                                    }
                                     if (videoInfoItem.filePath) {
                                         root.syncSelectedAutoCropState()
                                         root.refreshSelectedPreview(true)
@@ -464,6 +468,10 @@ Item {
                                 enabled: !root.orientationDebouncing
                                 onClicked: {
                                     root.beginOrientationDebounce()
+                                    dropList.resetAutoDetectedRotations()
+                                    if (!root.selectedManualRotationEdited) {
+                                        root.selectedManualRotationAngle = 0
+                                    }
                                     if (videoInfoItem.filePath) {
                                         root.syncSelectedAutoCropState()
                                         root.refreshSelectedPreview(true)
