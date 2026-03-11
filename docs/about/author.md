@@ -30,7 +30,7 @@ aside: false
   <h2 class="section-title">开发者</h2>
   <div class="team-container">
     <div class="member-card">
-      <img src="/author.png" class="member-avatar" alt="PythonImporter">
+      <DocImage src="/author.png" alt="PythonImporter" variant="avatar" class="member-avatar"></DocImage>
       <div class="member-name">PythonImporter</div>
       <div class="member-title">NeatReel 开发者</div>
       <div class="member-links">
@@ -42,7 +42,7 @@ aside: false
   <h2 class="section-title">特别感谢</h2>
   <div class="team-container">
     <div class="member-card">
-      <img src="/contributor_avatar.jpg" class="member-avatar" alt="陈x漩">
+      <DocImage src="/contributor_avatar.jpg" alt="陈x漩" variant="avatar" class="member-avatar"></DocImage>
       <div class="member-name">陈x漩</div>
       <div class="member-title">热心支持者 / 图像收集者</div>
       <p class="member-desc">在项目初期提供了大量的图像样本，协助了去黑边算法的调研工作。</p>
