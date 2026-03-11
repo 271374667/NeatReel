@@ -176,7 +176,7 @@ Item {
             Text {
                 text: "等待任务中"
                 font.pixelSize: root.textSize
-                font.family: "Microsoft YaHei UI"
+                font.family: appFontFamily
                 font.weight: Font.Normal
                 color: root.textColor
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -222,7 +222,7 @@ Item {
             Text {
                 text: root.errorText
                 font.pixelSize: root.textSize
-                font.family: "Microsoft YaHei UI"
+                font.family: appFontFamily
                 font.weight: Font.Normal
                 color: "#d83b01"
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -254,3 +254,4 @@ Item {
         // ── Normal 但无画面时的黑屏（已由 cardBody 颜色处理） ──
     }
 }
+

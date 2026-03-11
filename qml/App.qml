@@ -71,7 +71,7 @@ Window {
         contentItem: Text {
             text: menuButton.text
             font.pixelSize: 13
-            font.family: "Microsoft YaHei UI"
+            font.family: appFontFamily
             font.weight: Font.Medium
             color: "#1f2328"
             horizontalAlignment: Text.AlignHCenter
@@ -212,3 +212,4 @@ Window {
         }
     }
 }
+

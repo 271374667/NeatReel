@@ -434,7 +434,7 @@ Item {
                             Text {
                                 text: "画面方向"
                                 font.pixelSize: 13
-                                font.family: "Microsoft YaHei UI"
+                                font.family: appFontFamily
                                 font.weight: Font.Medium
                                 color: "#1a1a1a"
                                 verticalAlignment: Text.AlignVCenter
@@ -491,7 +491,7 @@ Item {
                             Text {
                                 text: "输出视频"
                                 font.pixelSize: 13
-                                font.family: "Microsoft YaHei UI"
+                                font.family: appFontFamily
                                 font.weight: Font.Medium
                                 color: "#1a1a1a"
                                 verticalAlignment: Text.AlignVCenter
@@ -539,7 +539,7 @@ Item {
                                         Text {
                                             text: "处理模式"
                                             font.pixelSize: 12
-                                            font.family: "Microsoft YaHei UI"
+                                            font.family: appFontFamily
                                             color: "#5c6670"
                                             renderType: Text.NativeRendering
                                         }
@@ -592,7 +592,7 @@ Item {
                                         Text {
                                             text: "启动自动剪裁"
                                             font.pixelSize: 12
-                                            font.family: "Microsoft YaHei UI"
+                                            font.family: appFontFamily
                                             color: "#5c6670"
                                             renderType: Text.NativeRendering
                                         }
@@ -621,7 +621,7 @@ Item {
                                     Text {
                                         text: "视频封面"
                                         font.pixelSize: 13
-                                        font.family: "Microsoft YaHei UI"
+                                        font.family: appFontFamily
                                         color: "#1a1a1a"
                                         verticalAlignment: Text.AlignVCenter
                                         renderType: Text.NativeRendering
@@ -643,7 +643,7 @@ Item {
                                     Text {
                                         text: "输出文件夹"
                                         font.pixelSize: 13
-                                        font.family: "Microsoft YaHei UI"
+                                        font.family: appFontFamily
                                         color: "#1a1a1a"
                                         verticalAlignment: Text.AlignVCenter
                                         renderType: Text.NativeRendering
@@ -664,7 +664,7 @@ Item {
                                             anchors.rightMargin: 12
                                             text: root.outputDirectory
                                             font.pixelSize: 12
-                                            font.family: "Microsoft YaHei UI"
+                                            font.family: appFontFamily
                                             color: "#5c6670"
                                             verticalAlignment: Text.AlignVCenter
                                             elide: Text.ElideMiddle
@@ -781,3 +781,4 @@ Item {
         HandCursor {}
     }
 }
+

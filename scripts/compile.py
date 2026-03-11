@@ -13,9 +13,12 @@ RESOURCE_DIR = PROJECT_ROOT / "src" / "resources"
 QRC_FILE = RESOURCE_DIR / "qml_resources.qrc"
 PY_RESOURCE_FILE = RESOURCE_DIR / "qml_resources.py"
 QRC_PREFIX = "/qml"
+REQUIRED_RESOURCE_FILES = [
+    QML_DIR / "Fonts" / "AlibabaPuHuiTi-3-55-Regular.ttf",
+]
 
 
-def iter_qml_files() -> list[Path]:
+def iter_resource_files() -> list[Path]:
     return sorted(path for path in QML_DIR.rglob("*") if path.is_file())
 
 
@@ -29,6 +32,13 @@ def build_qrc_content(files: list[Path]) -> str:
 
     lines.extend(["  </qresource>", "</RCC>", ""])
     return "\n".join(lines)
+
+
+def validate_required_resources(files: list[Path]) -> None:
+    missing_files = [path for path in REQUIRED_RESOURCE_FILES if path not in files]
+    if missing_files:
+        missing_list = ", ".join(path.relative_to(PROJECT_ROOT).as_posix() for path in missing_files)
+        raise FileNotFoundError(f"Missing required resource files: {missing_list}")
 
 
 def find_rcc_command() -> list[str]:
@@ -54,9 +64,10 @@ def compile_resources() -> None:
 
     RESOURCE_DIR.mkdir(parents=True, exist_ok=True)
 
-    files = iter_qml_files()
+    files = iter_resource_files()
     if not files:
         raise RuntimeError(f"No files found under {QML_DIR}")
+    validate_required_resources(files)
 
     QRC_FILE.write_text(build_qrc_content(files), encoding="utf-8")
 
@@ -65,6 +76,8 @@ def compile_resources() -> None:
 
     print(f"Generated: {QRC_FILE.relative_to(PROJECT_ROOT)}")
     print(f"Generated: {PY_RESOURCE_FILE.relative_to(PROJECT_ROOT)}")
+    for font_file in REQUIRED_RESOURCE_FILES:
+        print(f"Embedded resource: {font_file.relative_to(PROJECT_ROOT)}")
 
 
 if __name__ == "__main__":

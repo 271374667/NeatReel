@@ -126,7 +126,7 @@ Item {
             Text {
                 text: "视频信息"
                 font.pixelSize: 13
-                font.family: "Microsoft YaHei UI"
+                font.family: appFontFamily
                 font.weight: Font.DemiBold
                 color: root.labelColor
                 anchors.verticalCenter: parent.verticalCenter
@@ -170,7 +170,7 @@ Item {
                 Text {
                     text: "文件名"
                     font.pixelSize: 12
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.labelColor
                     renderType: Text.NativeRendering
@@ -179,7 +179,7 @@ Item {
                 Text {
                     text: root.fileName || "—"
                     font.pixelSize: 14
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.valueColor
                     elide: Text.ElideMiddle
@@ -197,7 +197,7 @@ Item {
                 Text {
                     text: "文件路径"
                     font.pixelSize: 12
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.labelColor
                     renderType: Text.NativeRendering
@@ -206,7 +206,7 @@ Item {
                 Text {
                     text: root.filePath || "—"
                     font.pixelSize: 14
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.valueColor
                     elide: Text.ElideMiddle
@@ -224,7 +224,7 @@ Item {
                 Text {
                     text: "总时长 / 原始分辨率"
                     font.pixelSize: 12
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.labelColor
                     renderType: Text.NativeRendering
@@ -233,7 +233,7 @@ Item {
                 Text {
                     text: root.durationAndResolution || "—"
                     font.pixelSize: 14
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.valueColor
                     elide: Text.ElideRight
@@ -251,7 +251,7 @@ Item {
                 Text {
                     text: "相对于原视频顺时针旋转角度"
                     font.pixelSize: 12
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.accentColor
                     renderType: Text.NativeRendering
@@ -260,7 +260,7 @@ Item {
                 Text {
                     text: root.rotationAngle + "°"
                     font.pixelSize: 14
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     font.weight: Font.DemiBold
                     color: root.accentColor
                     elide: Text.ElideRight
@@ -272,3 +272,4 @@ Item {
         }
     }
 }
+

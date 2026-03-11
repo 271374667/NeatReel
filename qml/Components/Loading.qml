@@ -104,7 +104,7 @@ Item {
             color: root.textColor
             width: Math.max(root.minTenCjkWidth, implicitWidth)
             font.pixelSize: root.adaptiveTextSize
-            font.family: "Microsoft YaHei UI"
+            font.family: appFontFamily
             font.weight: Font.Normal
             wrapMode: Text.NoWrap
             maximumLineCount: 1
@@ -125,3 +125,4 @@ Item {
         }
     }
 }
+

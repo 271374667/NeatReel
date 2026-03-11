@@ -653,7 +653,7 @@ Item {
                                 text: root.getFileName(delegateRoot.filePath)
                                 font.pixelSize: 13
                                 font.weight: Font.Medium
-                                font.family: "Microsoft YaHei UI"
+                                font.family: appFontFamily
                                 color: "#1a1a1a"
                                 elide: Text.ElideRight
                                 maximumLineCount: 1
@@ -664,7 +664,7 @@ Item {
                                 Layout.fillWidth: true
                                 text: root.elideMiddlePath(delegateRoot.filePath, 45)
                                 font.pixelSize: 11
-                                font.family: "Microsoft YaHei UI"
+                                font.family: appFontFamily
                                 color: "#888888"
                                 elide: Text.ElideRight
                                 maximumLineCount: 1
@@ -682,7 +682,7 @@ Item {
                         anchors.rightMargin: 8
                         text: "#" + (delegateRoot.index + 1)
                         font.pixelSize: 11
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                         font.weight: Font.Normal
                         color: delegateRoot.isSelected ? "#0078D4" : "#aaaaaa"
                         opacity: delegateRoot.isBeingDragged ? 0.5 : 1.0
@@ -1015,7 +1015,7 @@ Item {
                     text: "拖拽视频文件至此"
                     color: "#999999"
                     font.pixelSize: 14
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                 }
 
                 // 浏览文件按钮
@@ -1034,7 +1034,7 @@ Item {
                         text: "浏览文件"
                         color: "#666666"
                         font.pixelSize: 13
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                     }
 
                     MouseArea {
@@ -1144,7 +1144,7 @@ Item {
                     color: "#0078D4"
                     font.pixelSize: 15
                     font.weight: Font.Medium
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                 }
             }
         }
@@ -1233,7 +1233,7 @@ Item {
                 text: dragState.draggedFileName
                 font.pixelSize: 12
                 font.weight: Font.Medium
-                font.family: "Microsoft YaHei UI"
+                font.family: appFontFamily
                 color: "#1a1a1a"
                 elide: Text.ElideRight
                 maximumLineCount: 1
@@ -1241,3 +1241,4 @@ Item {
         }
     }
 }
+

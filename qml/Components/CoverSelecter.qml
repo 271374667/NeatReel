@@ -124,7 +124,7 @@ Item {
             Text {
                 text: "设置封面"
                 font.pixelSize: root.fontSize
-                font.family: "Microsoft YaHei UI"
+                font.family: appFontFamily
                 font.weight: Font.DemiBold
                 color: root.accentColor
                 Layout.alignment: Qt.AlignVCenter
@@ -222,7 +222,7 @@ Item {
                     Text {
                         text: "更改"
                         font.pixelSize: root.fontSize
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                         font.weight: Font.DemiBold
                         color: root.accentColor
                         Layout.alignment: Qt.AlignVCenter
@@ -262,7 +262,7 @@ Item {
                     Text {
                         text: "清除"
                         font.pixelSize: root.fontSize
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                         font.weight: Font.Normal
                         color: clearMa.containsMouse ? root.clearHoverColor : root.clearColor
                         Layout.alignment: Qt.AlignVCenter
@@ -277,3 +277,4 @@ Item {
         }
     }
 }
+

@@ -19,21 +19,28 @@
    uv sync
    ```
 
-2. **执行编译脚本**:
-   使用 `uv run` 确保在正确的虚拟环境中运行构建脚本：
+2. **执行资源编译脚本**:
+   使用 `uv run` 先重新生成 Qt 资源文件：
    ```bash
    uv run python scripts/compile.py
    ```
-   > 该脚本会调用 `scripts/build.py` 并配合 `PyInstaller` 完成静态资源的提取与编译。
+   > 该脚本会扫描 `qml/` 目录下的全部前端资源并重建 `src/resources/qml_resources.qrc` 与 `src/resources/qml_resources.py`。`qml/Fonts/AlibabaPuHuiTi-3-55-Regular.ttf` 也会在这一步被写入 RCC，保证调试打包后的字体一致。
 
-3. **查看结果**:
-   编译成功后，可执行文件将出现在根目录下的 `dist` 文件夹内。
+3. **执行打包脚本**:
+   资源编译完成后，再运行：
+   ```bash
+   uv run python scripts/build.py
+   ```
+   > `scripts/build.py` 会先调用 `scripts/compile.py`，然后通过 `PyInstaller` 打包，并把 `src.resources.qml_resources` 一起带入最终产物。
+
+4. **查看结果**:
+   打包成功后，可执行文件将出现在根目录下的 `dist` 文件夹内。
 
 
 ### 📂 目录结构说明
 
 - **`src/`**: 后端核心逻辑，包含视频读取器、合并器等。
-- **`qml/`**: 前端界面代码，采用 QML 语法编写。
+- **`qml/`**: 前端界面代码，采用 QML 语法编写，`qml/Fonts/` 下的字体会被编译进 Qt 资源系统。
 - **`scripts/`**: 项目维护、编译与打包脚本。
 
 ::: tip 💡 提示

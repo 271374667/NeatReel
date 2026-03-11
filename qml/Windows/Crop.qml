@@ -393,7 +393,7 @@ Item {
             Text {
                 text: infoCard.title
                 font.pixelSize: 12
-                font.family: "Microsoft YaHei UI"
+                font.family: appFontFamily
                 color: "#5c6670"
                 renderType: Text.NativeRendering
             }
@@ -401,7 +401,7 @@ Item {
             Text {
                 text: infoCard.value
                 font.pixelSize: 18
-                font.family: infoCard.mono ? "Consolas" : "Segoe UI Variable Display"
+                font.family: appFontFamily
                 font.weight: Font.DemiBold
                 color: infoCard.valueColor
                 elide: Text.ElideRight
@@ -412,7 +412,7 @@ Item {
                 visible: infoCard.note.length > 0
                 text: infoCard.note
                 font.pixelSize: 11
-                font.family: "Microsoft YaHei UI"
+                font.family: appFontFamily
                 color: "#8a939d"
                 elide: Text.ElideRight
                 renderType: Text.NativeRendering
@@ -607,7 +607,7 @@ Item {
                             anchors.centerIn: parent
                             text: root.formatResolution(root.cropWidthValue, root.cropHeightValue)
                             font.pixelSize: 12
-                            font.family: "Consolas"
+                            font.family: appFontFamily
                             font.weight: Font.DemiBold
                             color: "white"
                             renderType: Text.NativeRendering
@@ -708,7 +708,7 @@ Item {
                 Text {
                     text: "拖拽裁剪框或边缘控制点，实时查看输出尺寸与坐标。确认时会自动换算回原视频坐标。"
                     font.pixelSize: 12
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     color: "#5f6973"
                     renderType: Text.NativeRendering
                 }
@@ -780,3 +780,4 @@ Item {
         }
     }
 }
+

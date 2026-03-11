@@ -118,7 +118,7 @@ Window {
                 Text {
                     text: card.titleText
                     font.pixelSize: 18
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     font.weight: Font.DemiBold
                     color: "#111827"
                     renderType: Text.NativeRendering
@@ -128,7 +128,7 @@ Window {
                     visible: card.descriptionText.length > 0
                     text: card.descriptionText
                     font.pixelSize: 12
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     color: "#667085"
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
@@ -139,7 +139,7 @@ Window {
             Text {
                 text: "›"
                 font.pixelSize: 24
-                font.family: "Segoe UI Symbol"
+                font.family: appFontFamily
                 color: "#7c8795"
                 Layout.alignment: Qt.AlignVCenter
                 renderType: Text.NativeRendering
@@ -221,7 +221,7 @@ Window {
                         width: parent.width
                         text: "净影连 NeatReel"
                         font.pixelSize: 36
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                         font.weight: Font.Bold
                         color: "#101828"
                         horizontalAlignment: Text.AlignHCenter
@@ -232,7 +232,7 @@ Window {
                         text: "版本 " + aboutService.version
                         width: parent.width
                         font.pixelSize: 18
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                         color: "#344054"
                         horizontalAlignment: Text.AlignHCenter
                         renderType: Text.NativeRendering
@@ -242,7 +242,7 @@ Window {
                         width: parent.width
                         text: "去黑边，正朝向，一键拼出好影像"
                         font.pixelSize: 17
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                         color: "#475467"
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
@@ -274,7 +274,7 @@ Window {
                     Text {
                         text: "开发者：PythonImporter"
                         font.pixelSize: 18
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                         font.weight: Font.DemiBold
                         color: "#111827"
                         renderType: Text.NativeRendering
@@ -287,7 +287,7 @@ Window {
                         Text {
                             text: "联系作者"
                             font.pixelSize: 15
-                            font.family: "Microsoft YaHei UI"
+                            font.family: appFontFamily
                             color: "#475467"
                             renderType: Text.NativeRendering
                         }
@@ -333,7 +333,7 @@ Window {
                 width: parent.width
                 text: "\u00A9 " + new Date().getFullYear() + " PythonImporter · 当前许可：" + aboutService.licenseText
                 font.pixelSize: 13
-                font.family: "Microsoft YaHei UI"
+                font.family: appFontFamily
                 color: "#667085"
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
@@ -342,3 +342,4 @@ Window {
         }
     }
 }
+

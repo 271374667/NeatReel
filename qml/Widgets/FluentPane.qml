@@ -140,7 +140,7 @@ Item {
                     visible: root.title.length > 0
                     text: root.title
                     font.pixelSize: root.titleSize
-                    font.family: "Microsoft YaHei UI"
+                    font.family: appFontFamily
                     font.weight: Font.DemiBold
                     color: root.titleColor
                     elide: Text.ElideRight
@@ -178,3 +178,4 @@ Item {
         }
     }
 }
+

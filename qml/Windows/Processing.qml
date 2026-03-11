@@ -93,14 +93,14 @@ Item {
             Text {
                 text: statCard.title
                 font.pixelSize: 12
-                font.family: "Microsoft YaHei UI"
+                font.family: appFontFamily
                 color: "#5c6670"
                 renderType: Text.NativeRendering
             }
             Text {
                 text: statCard.value
                 font.pixelSize: statCard.big ? 22 : 18
-                font.family: statCard.mono ? "Consolas" : "Microsoft YaHei UI"
+                font.family: appFontFamily
                 font.weight: Font.DemiBold
                 color: statCard.valueColor
                 elide: Text.ElideRight
@@ -110,7 +110,7 @@ Item {
                 visible: statCard.note.length > 0
                 text: statCard.note
                 font.pixelSize: 11
-                font.family: "Microsoft YaHei UI"
+                font.family: appFontFamily
                 color: "#8a939d"
                 elide: Text.ElideRight
                 renderType: Text.NativeRendering
@@ -147,7 +147,7 @@ Item {
             anchors.centerIn: parent
             text: btn.text
             font.pixelSize: 13
-            font.family: "Microsoft YaHei UI"
+            font.family: appFontFamily
             font.weight: Font.DemiBold
             color: btn.primary ? "white" : btn.danger ? btn.hovered ? "#a4262c" : "#5e6670" : "#2f343a"
             renderType: Text.NativeRendering
@@ -172,7 +172,7 @@ Item {
 
         TextMetrics {
             id: pctMetrics
-            font.family: "Segoe UI Variable Display"
+            font.family: appFontFamily
             font.pixelSize: 32
             font.weight: Font.Bold
             text: "100%"
@@ -241,7 +241,7 @@ Item {
                         width: pctMetrics.advanceWidth + 2
                         horizontalAlignment: Text.AlignRight
                         font.pixelSize: 32
-                        font.family: "Segoe UI Variable Display"
+                        font.family: appFontFamily
                         font.weight: Font.Bold
                         color: root.barColor
                         renderType: Text.NativeRendering
@@ -254,7 +254,7 @@ Item {
                         Text {
                             text: root.totalCount > 0 ? "总任务 " + root.displayCurrentCount + " / " + root.totalCount : "已处理任务 " + root.displayCurrentCount
                             font.pixelSize: 13
-                            font.family: "Microsoft YaHei UI"
+                            font.family: appFontFamily
                             font.weight: Font.DemiBold
                             color: "#1f252b"
                             renderType: Text.NativeRendering
@@ -334,7 +334,7 @@ Item {
                         text: root.displayStageName
                         Layout.fillWidth: true
                         font.pixelSize: 12
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                         color: "#4e5964"
                         elide: Text.ElideRight
                         renderType: Text.NativeRendering
@@ -343,7 +343,7 @@ Item {
                     Text {
                         text: Math.round(root.displayStageProgress * 100) + "%"
                         font.pixelSize: 12
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                         color: "#6c7783"
                         renderType: Text.NativeRendering
                     }
@@ -352,7 +352,7 @@ Item {
                         visible: root.processingStatus === 0 && root.estimatedRemaining.length > 0
                         text: "预计剩余 " + root.estimatedRemaining
                         font.pixelSize: 12
-                        font.family: "Microsoft YaHei UI"
+                        font.family: appFontFamily
                         color: "#7c8793"
                         renderType: Text.NativeRendering
                     }
@@ -491,3 +491,4 @@ Item {
         }
     }
 }
+
