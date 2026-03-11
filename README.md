@@ -19,14 +19,11 @@
 
 净影连（NeatReel）是一款面向日常使用者的视频整理与拼接工具。它不仅仅是把视频首尾相接，而是将 **预览、纠正方向、去黑边、裁剪、封面设置、多模式输出** 六个高频痛点一键解决，让多段来源不一的视频快速整合成一条规整、统一的成片。
 
-## 20 秒了解 NeatReel
+## 40 秒了解 NeatReel
 
 下面这个视频将会带您快速查看三个有不规则黑边的视频是如何完美去除黑边然后旋转成正确的朝向最后合并的
 
-<video width="900" height="950" controls>
-    <source src="./README.assets/preview_movie.mp4" type="video/mp4">
-</video>
-
+![预览](./README.assets/PixPin_2026-03-11_12-00-20.webp)
 
 ## 🚀功能介绍
 
