@@ -40,26 +40,54 @@
 
 ## 如何运行该项目
 
-### 推荐运行方法(用户)
+### 普通用户
 
-直接通过 Release 下载最新的版本直接点击其中的 exe 文件即可运行
+直接通过 Release 下载最新的 Windows 版本，解压后运行 `NeatReel.exe` 即可。
 
-### 编译运行(程序员)
+- 当前主要面向 Windows 10 64 位与 Windows 11 64 位。
+- 默认输出目录为程序根目录下的 `output/` 文件夹。
+- GPU 模式仅适用于支持对应编码能力的 NVIDIA 显卡；不满足条件时请使用速度、均衡或质量模式。
 
-> 推荐运行环境 Python 3.10
-> 备注: 可以选择更高版本,但是不能低于 Python 3.10
+### 源码运行（开发者）
 
-通过在项目根目录下输入下面的命令安装第三方库
+> 推荐运行环境 Python 3.11+
+> 推荐使用 `uv` 管理依赖
+
+1. 安装依赖
 
 ```cmd
 uv sync
 ```
 
-然后运行项目根目录下的 `NeatReel.py` 文件
+2. 生成 Qt 资源文件
+
+```cmd
+uv run python scripts/compile.py
+```
+
+3. 启动应用
+
+```cmd
+uv run python NeatReel.py
+```
+
+> 说明
+>
+> - `NeatReel.py` 当前默认 `DEBUG=False`，因此源码运行前建议先执行一次 `scripts/compile.py`。
+> - 如果你希望直接加载本地 `qml/` 文件调试，可以手动把 `NeatReel.py` 中的 `DEBUG` 改为 `True`。
+
+### 打包
+
+```cmd
+uv run python scripts/build.py
+```
+
+打包结果位于 `dist/NeatReel/`。
 
 ## 额外说明
 
-- 该软件支持 Window10 64位 以及 Window11 64位，其余 Window 版本未经过测试，不保证稳定运行
+- 该软件目前仅在 Windows 10 64 位与 Windows 11 64 位上进行过验证，其它系统与平台不保证稳定运行
+- 同一时间只允许启动一个实例；重复启动会唤起已打开的窗口
 - 该软件永久免费，如果您在其他地方付费下载到了该软件请马上退款止损
 - 如果您使用出现了问题或者对软件的建议请您在该页面提出 issue
 - 如果您有更多的问题请前往文档查看
@@ -68,7 +96,7 @@ uv sync
 
 ## 📄 许可证
 
-本项目采用 [LGPL v3](LGPLv3.txt) 许可证。
+本项目采用 [LGPL v3](./LICENSE) 许可证。
 
 ---
 

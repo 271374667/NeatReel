@@ -10,8 +10,8 @@ hero:
     alt: NeatReel Logo
   actions:
     - theme: brand
-      text: 快速开始
-      link: /guide/introduction
+      text: 第一次使用
+      link: /guide/getting-started
     - theme: alt
       text: 在 GitHub 上查看
       link: https://github.com/271374667/NeatReel
@@ -25,7 +25,7 @@ features:
     details: 横竖混拍、倒置视频？统统不是问题。顺逆时针 90° 旋转，一键强制统一横屏或竖屏输出。
   - icon: ⚡
     title: 极速处理模式
-    details: 提供速度、均衡、质量三种模式，并支持 NVIDIA GPU 硬件加速，大批量素材瞬间搞定。
+    details: 提供速度、均衡、质量、GPU 四种处理模式，并支持 NVIDIA 硬件加速方案，大批量素材更省时间。
   - icon: 🖼️
     title: 实时效果预览
     details: “处理后预览”功能让你在正式导出前即刻看到裁剪与旋转后的成品效果，拒绝盲目等待。
@@ -52,6 +52,8 @@ features:
 ![NeatReel Banner](/banner.png)
 
 不论是来自手机的竖拍片段，还是带有黑边的录屏素材，净影连都能帮您快速归位，一键拼接出清爽干净的完美成片，让您轻松获得理想的视频。
+
+当前版本主要面向 Windows 10/11 64 位环境，适合做合并前整理、方向统一与裁剪修正，不以时间线剪辑和音轨编辑为目标。
 
 </div>
 

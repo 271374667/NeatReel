@@ -231,8 +231,10 @@ export default defineConfig({
       {
         text: '使用指南',
         items: [
+          { text: '安装与系统要求', link: '/guide/system-requirements' },
           { text: '项目简介', link: '/guide/introduction' },
-          { text: '快速上手', link: '/guide/getting-started' },
+          { text: '第一次使用', link: '/guide/getting-started' },
+          { text: '导入、排序与输出流程', link: '/guide/workflow' },
         ]
       },
       {
@@ -250,7 +252,7 @@ export default defineConfig({
         text: '进阶开发',
         items: [
           { text: '开发与构建', link: '/guide/build' },
-          { text: '常见问题 FAQ', link: '/guide/faq' }
+          { text: '故障排查与限制', link: '/guide/faq' }
         ]
       },
       {
