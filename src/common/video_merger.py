@@ -500,12 +500,13 @@ class VideoMerger:
                 )
 
                 input_container.close()
-                signals.fileFinished.emit(file_index + 1)
-                # Final progress update for this file
+                # Emit the final frame progress before fileFinished so total
+                # progress never overshoots and then snaps back at file boundaries.
                 signals.frameProcessed.emit(
                     segment_video_frame_count,
                     estimated_total_frames if estimated_total_frames > 0 else 0,
                 )
+                signals.fileFinished.emit(file_index + 1)
                 logger.info(
                     f"完成，video offset -> {video_pts_offset}, "
                     f"audio offset -> {audio_pts_offset}"
@@ -904,11 +905,13 @@ class VideoMerger:
                 out_packet.stream = out_audio
                 output_container.mux(out_packet)
 
-            signals.fileFinished.emit(file_index)
+            # Keep progress monotonic across files: finish the last frame update
+            # before reporting the file as completed.
             signals.frameProcessed.emit(
                 segment_video_frame_count,
                 estimated_total_frames if estimated_total_frames > 0 else 0,
             )
+            signals.fileFinished.emit(file_index)
         finally:
             input_container.close()
             output_container.close()
