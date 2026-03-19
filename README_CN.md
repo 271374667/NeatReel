@@ -1,6 +1,6 @@
-[English](./README.md) | [简体中文](./README_CN.md)
-
 <div align="center">
+
+[English](./README.md) | [简体中文](./README_CN.md)
 
 ![banner](./README.assets/image-20260308193341094.png)
 

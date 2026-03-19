@@ -1,8 +1,9 @@
-[English](./README.md) | [简体中文](./README_CN.md)
-
 <div align="center">
 
-![banner](./README.assets/image-20260308193341094.png)
+[English](./README.md) | [简体中文](./README_CN.md)
+
+
+![banner](./README.assets/PixPin_2026-03-19_23-08-15.png)
 
 # NeatReel
 
@@ -31,7 +32,7 @@ The clip below shows how several videos with irregular black borders can be clea
 
 <div align="center">
 
-![image-20260310172055334](./README.assets/image-20260310172055334.png)
+![image-20260310172055334](./README.assets/PixPin_2026-03-19_23-20-08.png)
 
 <div align="center">
     <p align="center">For full details, visit the documentation site.</p>
