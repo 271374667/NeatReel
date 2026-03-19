@@ -5,6 +5,7 @@ from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 
+from src.common.language_manager import LanguageManager
 from src.common.single_instance_guard import NeatReelSingleInstanceGuard
 from src.core.paths import LOGO_FILE
 from src.service.about_service import AboutService
@@ -72,6 +73,15 @@ def load_main_qml(engine: QQmlApplicationEngine, *, debug: bool) -> None:
     engine.load(QUrl("qrc:/qml/App.qml"))
 
 
+def update_application_display_name(app: QGuiApplication, language_manager: LanguageManager) -> None:
+    display_name = (
+        "净影连"
+        if language_manager.current_language == LanguageManager.CHINESE_LANGUAGE
+        else "NeatReel"
+    )
+    app.setApplicationDisplayName(display_name)
+
+
 def main(*, debug: bool = DEBUG) -> None:
     instance_guard = NeatReelSingleInstanceGuard()
     if instance_guard.has_running_instance():
@@ -80,8 +90,15 @@ def main(*, debug: bool = DEBUG) -> None:
     app = QGuiApplication(sys.argv)
     ensure_qml_resources_imported(debug=debug)
     app_font_family = configure_application_font(app, debug=debug)
+    language_manager = LanguageManager(app, debug=debug)
+    language_manager.initialize_language()
 
     engine = QQmlApplicationEngine()
+    language_manager.set_engine(engine)
+    language_manager.currentLanguageChanged.connect(
+        lambda: update_application_display_name(app, language_manager)
+    )
+    engine.rootContext().setContextProperty("languageManager", language_manager)
     engine.rootContext().setContextProperty("appFontFamily", app_font_family)
 
     # image provider (must be added before loading QML)
@@ -100,7 +117,7 @@ def main(*, debug: bool = DEBUG) -> None:
 
     load_main_qml(engine, debug=debug)
     app.setApplicationName("NeatReel")
-    app.setApplicationDisplayName("净影连")
+    update_application_display_name(app, language_manager)
     app.setWindowIcon(resolve_window_icon(debug)) # 图标设在load_main_qml之后，不然读不出来
 
     if not engine.rootObjects():

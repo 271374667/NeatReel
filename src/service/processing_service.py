@@ -7,7 +7,7 @@ from pathlib import Path
 from time import monotonic
 
 from loguru import logger
-from PySide6.QtCore import QObject, QThread, QTimer, QUuid, QUrl, Signal, Slot
+from PySide6.QtCore import QCoreApplication, QObject, QThread, QTimer, QUuid, QUrl, Signal, Slot
 from PySide6.QtGui import QImage
 
 from src.common.video_info_reader import CropResult, VideoInfoReader
@@ -37,6 +37,11 @@ _PROCESS_MODE_MAP = {
     2: VideoProcessMode.QUALITY,
     3: VideoProcessMode.GPU,
 }
+_MERGE_CANCELLED_MESSAGE = "已取消"
+
+
+def _tr(text: str) -> str:
+    return QCoreApplication.translate("ProcessingService", text)
 
 
 def _normalize_rotation_for_merge(angle: int, manually_edited: bool) -> int:
@@ -56,14 +61,14 @@ def _format_elapsed(seconds: float) -> str:
 def _format_remaining(seconds: float) -> str:
     seconds = max(0, int(seconds))
     if seconds < 60:
-        return f"{seconds} 秒"
+        return _tr("{seconds} 秒").format(seconds=seconds)
     if seconds < 3600:
         m = seconds // 60
         s = seconds % 60
-        return f"{m} 分 {s} 秒"
+        return _tr("{minutes} 分 {seconds} 秒").format(minutes=m, seconds=s)
     h = seconds // 3600
     m = (seconds % 3600) // 60
-    return f"{h} 小时 {m} 分"
+    return _tr("{hours} 小时 {minutes} 分").format(hours=h, minutes=m)
 
 
 def _pil_to_qimage(pil_image) -> QImage:
@@ -299,7 +304,7 @@ class ProcessingService(QObject):
         self.processingStatusChanged.emit(0)
         self.totalProgressChanged.emit(0.0)
         self.stageProgressChanged.emit(0.0)
-        self.stageNameChanged.emit("准备中")
+        self.stageNameChanged.emit(_tr("准备中"))
         self.elapsedTimeChanged.emit("00:00:00")
         self.processingSpeedChanged.emit(0.0)
         self.estimatedRemainingChanged.emit("")
@@ -356,7 +361,13 @@ class ProcessingService(QObject):
         self._file_start_time = monotonic()
 
         self.totalCurrentChanged.emit(file_index)
-        self.stageNameChanged.emit(f"处理文件 {file_index}/{self._total_files}: {file_name}")
+        self.stageNameChanged.emit(
+            _tr("处理文件 {current}/{total}: {file_name}").format(
+                current=file_index,
+                total=self._total_files,
+                file_name=file_name,
+            )
+        )
         self.stageProgressChanged.emit(0.0)
 
     def _on_frame_processed(self, current_frames: int, total_frames: int) -> None:
@@ -403,16 +414,16 @@ class ProcessingService(QObject):
         self.processingStatusChanged.emit(1)  # Done
         self.totalProgressChanged.emit(1.0)
         self.stageProgressChanged.emit(1.0)
-        self.stageNameChanged.emit("完成")
+        self.stageNameChanged.emit(_tr("完成"))
         self.estimatedRemainingChanged.emit("")
 
     def _on_merge_error(self, message: str) -> None:
         self._elapsed_timer.stop()
         self.processingStatusChanged.emit(2)  # Error
-        if message == "已取消":
-            self.stageNameChanged.emit("已取消")
+        if message == _MERGE_CANCELLED_MESSAGE:
+            self.stageNameChanged.emit(_tr("已取消"))
         else:
-            self.stageNameChanged.emit("错误")
+            self.stageNameChanged.emit(_tr("错误"))
             logger.error(f"Merge error: {message}")
 
     def _on_display_frame(self, qimage: QImage) -> None:

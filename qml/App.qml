@@ -125,6 +125,24 @@ Window {
             text: qsTr("关于")
             onTriggered: aboutDialog.openWindow()
         }
+
+        Menu {
+            title: qsTr("语言")
+
+            MenuItem {
+                text: qsTr("中文")
+                checkable: true
+                checked: languageManager.currentLanguage === languageManager.chineseLanguage
+                onTriggered: languageManager.setLanguage(languageManager.chineseLanguage)
+            }
+
+            MenuItem {
+                text: qsTr("英文")
+                checkable: true
+                checked: languageManager.currentLanguage === languageManager.englishLanguage
+                onTriggered: languageManager.setLanguage(languageManager.englishLanguage)
+            }
+        }
     }
 
     About {

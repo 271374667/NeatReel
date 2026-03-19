@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from qthreadwithreturn import QThreadWithReturn
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import Property, QCoreApplication, QObject, Signal, Slot
 
 from src.core.version import VersionHandler
+
+
+def _tr(text: str) -> str:
+    return QCoreApplication.translate("AboutService", text)
 
 
 class AboutService(QObject):
@@ -60,22 +64,25 @@ class AboutService(QObject):
     def _build_update_status_text() -> str:
         updates, error = VersionHandler.check_for_updates_detailed()
         if error:
-            first_line = error.strip().splitlines()[0] if error.strip() else "未知错误"
-            return f"检查更新失败：{first_line}"
+            first_line = error.strip().splitlines()[0] if error.strip() else _tr("未知错误")
+            return _tr("检查更新失败：{message}").format(message=first_line)
 
         if not updates:
-            return "当前已是最新版本"
+            return _tr("当前已是最新版本")
 
         versions = [next(iter(item.keys())) for item in updates if item]
         if not versions:
-            return "发现新版本，请前往仓库查看发布信息"
+            return _tr("发现新版本，请前往仓库查看发布信息")
 
         if len(versions) == 1:
-            return f"发现新版本：{versions[0]}"
+            return _tr("发现新版本：{version}").format(version=versions[0])
 
         preview_versions = "、".join(versions[:3])
-        more_suffix = " 等" if len(versions) > 3 else ""
-        return f"发现新版本：{preview_versions}{more_suffix}"
+        more_suffix = _tr(" 等") if len(versions) > 3 else ""
+        return _tr("发现新版本：{versions}{suffix}").format(
+            versions=preview_versions,
+            suffix=more_suffix,
+        )
 
     @Slot()
     def checkForUpdates(self) -> None:
@@ -83,7 +90,7 @@ class AboutService(QObject):
             return
 
         self._set_is_checking_for_updates(True)
-        self._set_update_status_text("正在检查更新...")
+        self._set_update_status_text(_tr("正在检查更新..."))
 
         thread = QThreadWithReturn(
             self._build_update_status_text,
@@ -103,7 +110,9 @@ class AboutService(QObject):
     @Slot(object)
     def _on_update_check_failed(self, exception: Exception) -> None:
         self._set_is_checking_for_updates(False)
-        self._set_update_status_text(f"检查更新失败：{exception}")
+        self._set_update_status_text(
+            _tr("检查更新失败：{message}").format(message=exception)
+        )
 
     @Slot()
     def _on_update_thread_finished(self) -> None:
