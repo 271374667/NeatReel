@@ -196,7 +196,7 @@ Item {
 
     FolderDialog {
         id: outputFolderDialog
-        title: "选择输出文件夹"
+        title: qsTr("选择输出文件夹")
         currentFolder: homeService.localPathToUrl(root.outputDirectory)
         onAccepted: {
             root.outputDirectory = homeService.normalizeLocalPath(selectedFolder.toString())
@@ -224,7 +224,7 @@ Item {
         // ════════════════════════════════════════════════════
         FluentPane {
             id: leftPane
-            title: "视频列表"
+            title: qsTr("视频列表")
             icon: ImagePath.videoList
             contentTopMargin: 0
             contentLeftMargin: 0
@@ -308,7 +308,7 @@ Item {
                 // ════════════════════════════════════════════
                 FluentPane {
                     id: detailPane
-                    title: "视频详情"
+                    title: qsTr("视频详情")
                     icon: ImagePath.movie
 
                     Layout.fillWidth: true
@@ -336,7 +336,7 @@ Item {
 
                             Button {
                                 id: autoCropToggleButton
-                                text: root.showingOriginal ? "使用自动去黑边算法" : "使用原始视频"
+                                text: root.showingOriginal ? qsTr("使用自动去黑边算法") : qsTr("使用原始视频")
                                 Layout.preferredWidth: detailContent.actionButtonWidth
                                 icon.source: ImagePath.crop
                                 enabled: root.topActionButtonsEnabled
@@ -353,7 +353,7 @@ Item {
                             }
 
                             Button {
-                                text: "手动剪裁"
+                                text: qsTr("手动剪裁")
                                 icon.source: ImagePath.crop
                                 Layout.preferredWidth: detailContent.actionButtonWidth
                                 enabled: root.topActionButtonsEnabled
@@ -368,7 +368,7 @@ Item {
                             spacing: 8
 
                             Button {
-                                text: "顺时针旋转90°"
+                                text: qsTr("顺时针旋转90°")
                                 Layout.preferredWidth: detailContent.actionButtonWidth
                                 icon.source: ImagePath.clockwise
                                 enabled: root.topActionButtonsEnabled
@@ -383,7 +383,7 @@ Item {
                             }
 
                             Button {
-                                text: "逆时针旋转90°"
+                                text: qsTr("逆时针旋转90°")
                                 Layout.preferredWidth: detailContent.actionButtonWidth
                                 icon.source: ImagePath.counterClockwise
                                 enabled: root.topActionButtonsEnabled
@@ -415,7 +415,7 @@ Item {
                 // ════════════════════════════════════════════
                 FluentPane {
                     id: outputPane
-                    title: "输出配置"
+                    title: qsTr("输出配置")
                     icon: ImagePath.setting
 
                     Layout.fillWidth: true
@@ -432,7 +432,7 @@ Item {
                             spacing: 16
 
                             Text {
-                                text: "画面方向"
+                                text: qsTr("画面方向")
                                 font.pixelSize: 13
                                 font.family: appFontFamily
                                 font.weight: Font.Medium
@@ -443,7 +443,7 @@ Item {
 
                             RadioButton {
                                 id: landscapeRadio
-                                text: "横屏"
+                                text: qsTr("横屏")
                                 checked: true
                                 ButtonGroup.group: orientationGroup
                                 enabled: !root.orientationDebouncing
@@ -463,7 +463,7 @@ Item {
 
                             RadioButton {
                                 id: portraitRadio
-                                text: "竖屏"
+                                text: qsTr("竖屏")
                                 ButtonGroup.group: orientationGroup
                                 enabled: !root.orientationDebouncing
                                 onClicked: {
@@ -489,7 +489,7 @@ Item {
                             spacing: 16
 
                             Text {
-                                text: "输出视频"
+                                text: qsTr("输出视频")
                                 font.pixelSize: 13
                                 font.family: appFontFamily
                                 font.weight: Font.Medium
@@ -500,7 +500,7 @@ Item {
 
                             RadioButton {
                                 id: mergeOutputRadio
-                                text: "合并成一个视频"
+                                text: qsTr("合并成一个视频")
                                 checked: true
                                 ButtonGroup.group: outputModeGroup
                                 HandCursor {}
@@ -508,7 +508,7 @@ Item {
 
                             RadioButton {
                                 id: separateOutputRadio
-                                text: "分别输出"
+                                text: qsTr("分别输出")
                                 ButtonGroup.group: outputModeGroup
                                 HandCursor {}
                             }
@@ -519,7 +519,7 @@ Item {
                         // ── 高级设置手风琴 ──
                         Accordion {
                             id: advancedAccordion
-                            title: "高级设置"
+                            title: qsTr("高级设置")
                             Layout.fillWidth: true
 
                             ColumnLayout {
@@ -537,7 +537,7 @@ Item {
                                         spacing: 4
 
                                         Text {
-                                            text: "处理模式"
+                                            text: qsTr("处理模式")
                                             font.pixelSize: 12
                                             font.family: appFontFamily
                                             color: "#5c6670"
@@ -550,20 +550,20 @@ Item {
                                             textRole: "text"
                                             model: [
                                                 {
-                                                    text: "速度",
-                                                    tooltip: "比均衡快2~3倍,但体积增大20%~40%，画质略微损失"
+                                                    text: qsTr("速度"),
+                                                    tooltip: qsTr("比均衡快2~3倍,但体积增大20%~40%，画质略微损失")
                                                 },
                                                 {
-                                                    text: "均衡",
-                                                    tooltip: "速度，体积，大小的均衡选择"
+                                                    text: qsTr("均衡"),
+                                                    tooltip: qsTr("速度，体积，大小的均衡选择")
                                                 },
                                                 {
-                                                    text: "质量",
-                                                    tooltip: "比均衡慢 1~2 倍，体积减少 20%~40%"
+                                                    text: qsTr("质量"),
+                                                    tooltip: qsTr("比均衡慢 1~2 倍，体积减少 20%~40%")
                                                 },
                                                 {
-                                                    text: "GPU",
-                                                    tooltip: "需要有N卡硬件支持，否则会报错"
+                                                    text: qsTr("GPU"),
+                                                    tooltip: qsTr("需要有N卡硬件支持，否则会报错")
                                                 }
                                             ]
                                             currentIndex: 1
@@ -590,7 +590,7 @@ Item {
                                         spacing: 4
 
                                         Text {
-                                            text: "启动自动剪裁"
+                                            text: qsTr("启动自动剪裁")
                                             font.pixelSize: 12
                                             font.family: appFontFamily
                                             color: "#5c6670"
@@ -619,7 +619,7 @@ Item {
                                     spacing: 10
 
                                     Text {
-                                        text: "视频封面"
+                                        text: qsTr("视频封面")
                                         font.pixelSize: 13
                                         font.family: appFontFamily
                                         color: "#1a1a1a"
@@ -641,7 +641,7 @@ Item {
                                     spacing: 10
 
                                     Text {
-                                        text: "输出文件夹"
+                                        text: qsTr("输出文件夹")
                                         font.pixelSize: 13
                                         font.family: appFontFamily
                                         color: "#1a1a1a"
@@ -673,13 +673,13 @@ Item {
                                     }
 
                                     Button {
-                                        text: "浏览"
+                                        text: qsTr("浏览")
                                         onClicked: outputFolderDialog.open()
                                         HandCursor {}
                                     }
 
                                     Button {
-                                        text: "默认"
+                                        text: qsTr("默认")
                                         enabled: root.outputDirectory !== root.defaultOutputDirectory
                                         onClicked: root.outputDirectory = root.defaultOutputDirectory
                                         HandCursor {}
@@ -758,7 +758,7 @@ Item {
 
     Button {
         id: startFloatButton
-        text: "开始处理"
+        text: qsTr("开始处理")
         highlighted: true
         icon.source: ImagePath.play
         enabled: dropList.itemCount > 0

@@ -21,7 +21,7 @@ Item {
     property int selectionVersion: 0
     property int anchorIndex: -1
     property bool defaultAutoCropEnabled: true
-    readonly property string usageToolTipText: "鼠标拖放视频到此处添加视频\n快捷键说明：\n1. ctrl + A 全选\n2. ctrl + D, delete, backspace 删除\n3. ctrl + 鼠标左键 单选\n4. shift + 鼠标左键 连续选择\n\n长按单个视频进行拖拽排序\n\n右键可以智能排序以及展开更多操作"
+    readonly property string usageToolTipText: qsTr("鼠标拖放视频到此处添加视频\n快捷键说明：\n1. ctrl + A 全选\n2. ctrl + D, delete, backspace 删除\n3. ctrl + 鼠标左键 单选\n4. shift + 鼠标左键 连续选择\n\n长按单个视频进行拖拽排序\n\n右键可以智能排序以及展开更多操作")
 
     // ── 多选辅助函数 ──
     function isIndexSelected(idx) {
@@ -849,7 +849,7 @@ Item {
             Button {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 36
-                text: "添加视频"
+                text: qsTr("添加视频")
                 icon.source: ImagePath.add
                 onClicked: fileDialog.open()
 
@@ -862,23 +862,23 @@ Item {
         // ── 右键菜单（空白区域） ──
         Menu {
             id: emptySpaceMenu
-            MenuItem { text: "全选"; onTriggered: root.selectAll() }
-            MenuItem { text: "智能升序"; onTriggered: root.smartSort(true) }
-            MenuItem { text: "智能降序"; onTriggered: root.smartSort(false) }
+            MenuItem { text: qsTr("全选"); onTriggered: root.selectAll() }
+            MenuItem { text: qsTr("智能升序"); onTriggered: root.smartSort(true) }
+            MenuItem { text: qsTr("智能降序"); onTriggered: root.smartSort(false) }
         }
 
         // ── 右键菜单（单选项目） ──
         Menu {
             id: itemContextMenu
             property int targetIndex: -1
-            MenuItem { text: "智能升序"; onTriggered: root.smartSort(true) }
-            MenuItem { text: "智能降序"; onTriggered: root.smartSort(false) }
+            MenuItem { text: qsTr("智能升序"); onTriggered: root.smartSort(true) }
+            MenuItem { text: qsTr("智能降序"); onTriggered: root.smartSort(false) }
             MenuSeparator {}
-            MenuItem { text: "置顶"; onTriggered: root.moveItemToTop(itemContextMenu.targetIndex) }
-            MenuItem { text: "置底"; onTriggered: root.moveItemToBottom(itemContextMenu.targetIndex) }
+            MenuItem { text: qsTr("置顶"); onTriggered: root.moveItemToTop(itemContextMenu.targetIndex) }
+            MenuItem { text: qsTr("置底"); onTriggered: root.moveItemToBottom(itemContextMenu.targetIndex) }
             MenuSeparator {}
             MenuItem {
-                text: "删除"
+                text: qsTr("删除")
                 onTriggered: root.removeItem(itemContextMenu.targetIndex)
             }
         }
@@ -887,7 +887,7 @@ Item {
         Menu {
             id: multiSelectMenu
             MenuItem {
-                text: "删除选中项 (" + root.getSelectedCount() + ")"
+                text: qsTr("删除选中项 (%1)").arg(root.getSelectedCount())
                 onTriggered: root.removeSelectedItems()
             }
         }
@@ -1012,7 +1012,7 @@ Item {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "拖拽视频文件至此"
+                    text: qsTr("拖拽视频文件至此")
                     color: "#999999"
                     font.pixelSize: 14
                     font.family: appFontFamily
@@ -1031,7 +1031,7 @@ Item {
                     Text {
                         id: browseLabel
                         anchors.centerIn: parent
-                        text: "浏览文件"
+                        text: qsTr("浏览文件")
                         color: "#666666"
                         font.pixelSize: 13
                         font.family: appFontFamily
@@ -1140,7 +1140,7 @@ Item {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "松开以添加视频文件"
+                    text: qsTr("松开以添加视频文件")
                     color: "#0078D4"
                     font.pixelSize: 15
                     font.weight: Font.Medium
@@ -1153,9 +1153,9 @@ Item {
     // ── 文件选择对话框 ──
     FileDialog {
         id: fileDialog
-        title: "选择视频文件"
+        title: qsTr("选择视频文件")
         fileMode: FileDialog.OpenFiles
-        nameFilters: ["视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.flv *.wmv *.m4v *.mpg *.mpeg *.3gp *.3g2 *.f4v *.rm *.rmvb *.asf)", "所有文件 (*)"]
+        nameFilters: [qsTr("视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.flv *.wmv *.m4v *.mpg *.mpeg *.3gp *.3g2 *.f4v *.rm *.rmvb *.asf)"), qsTr("所有文件 (*)")]
         onAccepted: {
             root.addVideoFiles(fileDialog.selectedFiles)
         }

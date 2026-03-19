@@ -13,7 +13,7 @@ Window {
     minimumWidth: 600
     minimumHeight: 700
     visible: true
-    title: "净影连 NeatReel"
+    title: qsTr("净影连 NeatReel")
     color: "#f5f7fa"
     readonly property url defaultPreviewFrameSource: ""
     readonly property int homePageIndex: 0
@@ -105,7 +105,7 @@ Window {
 
             CompactMenuButton {
                 id: settingsMenuButton
-                text: "设置(S)"
+                text: qsTr("设置(S)")
                 onClicked: {
                     settingsMenu.x = x
                     settingsMenu.y = compactMenuBar.height - 1
@@ -122,7 +122,7 @@ Window {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnReleaseOutside
 
         MenuItem {
-            text: "关于"
+            text: qsTr("关于")
             onTriggered: aboutDialog.openWindow()
         }
     }

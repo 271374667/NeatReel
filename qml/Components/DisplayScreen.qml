@@ -33,8 +33,8 @@ Item {
     property int textSize: 18                  // 提示文字大小
     property color textColor: "#888888"        // 提示文字颜色
     property int loadingTimeoutMs: 10000        // Loading 超时毫秒（可修改）
-    property string defaultErrorText: "无法打开该视频"
-    property string loadingTimeoutErrorText: "视频加载超时\n请检查视频文件是否正常"
+    property string defaultErrorText: qsTr("无法打开该视频")
+    property string loadingTimeoutErrorText: qsTr("视频加载超时\n请检查视频文件是否正常")
     property string errorText: defaultErrorText
 
     // ── 便捷函数 ──
@@ -174,7 +174,7 @@ Item {
             }
 
             Text {
-                text: "等待任务中"
+                text: qsTr("等待任务中")
                 font.pixelSize: root.textSize
                 font.family: appFontFamily
                 font.weight: Font.Normal
@@ -187,7 +187,7 @@ Item {
         Loading {
             id: loadingContent
             anchors.fill: parent
-            text: "视频加载中"
+            text: qsTr("视频加载中")
             running: root.displayState === DisplayScreen.State.Loading
             crop: true
         }

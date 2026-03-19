@@ -693,7 +693,7 @@ Item {
         FluentPane {
             Layout.fillWidth: true
             Layout.preferredHeight: cropInfoContent.implicitHeight + 88
-            title: "裁剪信息"
+            title: qsTr("裁剪信息")
             icon: ImagePath.crop
             contentTopMargin: 14
             contentLeftMargin: 16
@@ -706,7 +706,7 @@ Item {
                 spacing: 12
 
                 Text {
-                    text: "拖拽裁剪框或边缘控制点，实时查看输出尺寸与坐标。确认时会自动换算回原视频坐标。"
+                    text: qsTr("拖拽裁剪框或边缘控制点，实时查看输出尺寸与坐标。确认时会自动换算回原视频坐标。")
                     font.pixelSize: 12
                     font.family: appFontFamily
                     color: "#5f6973"
@@ -718,17 +718,17 @@ Item {
                     spacing: 10
 
                     InfoCard {
-                        title: "裁剪后分辨率"
+                        title: qsTr("裁剪后分辨率")
                         value: root.formatResolution(root.cropWidthValue, root.cropHeightValue)
-                        note: "输出图像尺寸"
+                        note: qsTr("输出图像尺寸")
                         valueColor: "#0078D4"
                         mono: true
                     }
 
                     InfoCard {
-                        title: "原始分辨率"
+                        title: qsTr("原始分辨率")
                         value: root.formatResolution(root.sourceImageWidth, root.sourceImageHeight)
-                        note: "原图尺寸"
+                        note: qsTr("原图尺寸")
                         mono: true
                     }
                 }
@@ -738,16 +738,16 @@ Item {
                     spacing: 10
 
                     InfoCard {
-                        title: "左上角坐标"
+                        title: qsTr("左上角坐标")
                         value: root.formatPoint(root.cropLeftValue, root.cropTopValue)
-                        note: "裁剪起点"
+                        note: qsTr("裁剪起点")
                         mono: true
                     }
 
                     InfoCard {
-                        title: "右下角坐标"
+                        title: qsTr("右下角坐标")
                         value: root.formatPoint(root.cropRightValue, root.cropBottomValue)
-                        note: "裁剪终点"
+                        note: qsTr("裁剪终点")
                         mono: true
                     }
                 }
@@ -758,7 +758,7 @@ Item {
             Layout.fillWidth: true
 
             Button {
-                text: "返回"
+                text: qsTr("返回")
                 implicitWidth: 124
                 implicitHeight: 40
                 onClicked: root.cancelRequested()
@@ -768,7 +768,7 @@ Item {
             Item { Layout.fillWidth: true }
 
             Button {
-                text: "确定"
+                text: qsTr("确定")
                 highlighted: true
                 enabled: root.hasLoadedImage
                 icon.source: ImagePath.crop

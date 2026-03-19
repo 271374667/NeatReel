@@ -5,7 +5,7 @@ Item {
     id: root
 
     // ── 公共属性 ──
-    property string text: "请稍候…"          // 自定义文字
+    property string text: qsTr("请稍候…")    // 自定义文字
     property bool running: false              // 控制显示/隐藏
     property color textColor: "#ffffff"       // 文字颜色
     property color indicatorColor: "#ffffff"  // BusyIndicator 颜色（可用透明度）

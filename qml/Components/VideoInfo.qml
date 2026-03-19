@@ -124,7 +124,7 @@ Item {
             }
 
             Text {
-                text: "视频信息"
+                text: qsTr("视频信息")
                 font.pixelSize: 13
                 font.family: appFontFamily
                 font.weight: Font.DemiBold
@@ -168,7 +168,7 @@ Item {
                 Layout.fillWidth: true
 
                 Text {
-                    text: "文件名"
+                    text: qsTr("文件名")
                     font.pixelSize: 12
                     font.family: appFontFamily
                     font.weight: Font.Normal
@@ -177,7 +177,7 @@ Item {
                 }
 
                 Text {
-                    text: root.fileName || "—"
+                    text: root.fileName || qsTr("—")
                     font.pixelSize: 14
                     font.family: appFontFamily
                     font.weight: Font.Normal
@@ -195,7 +195,7 @@ Item {
                 Layout.fillWidth: true
 
                 Text {
-                    text: "文件路径"
+                    text: qsTr("文件路径")
                     font.pixelSize: 12
                     font.family: appFontFamily
                     font.weight: Font.Normal
@@ -204,7 +204,7 @@ Item {
                 }
 
                 Text {
-                    text: root.filePath || "—"
+                    text: root.filePath || qsTr("—")
                     font.pixelSize: 14
                     font.family: appFontFamily
                     font.weight: Font.Normal
@@ -222,7 +222,7 @@ Item {
                 Layout.fillWidth: true
 
                 Text {
-                    text: "总时长 / 原始分辨率"
+                    text: qsTr("总时长 / 原始分辨率")
                     font.pixelSize: 12
                     font.family: appFontFamily
                     font.weight: Font.Normal
@@ -231,7 +231,7 @@ Item {
                 }
 
                 Text {
-                    text: root.durationAndResolution || "—"
+                    text: root.durationAndResolution || qsTr("—")
                     font.pixelSize: 14
                     font.family: appFontFamily
                     font.weight: Font.Normal
@@ -249,7 +249,7 @@ Item {
                 Layout.fillWidth: true
 
                 Text {
-                    text: "相对于原视频顺时针旋转角度"
+                    text: qsTr("相对于原视频顺时针旋转角度")
                     font.pixelSize: 12
                     font.family: appFontFamily
                     font.weight: Font.Normal

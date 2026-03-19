@@ -54,9 +54,9 @@ Item {
     // ══════════════════════════════════════
     FileDialog {
         id: fileDialog
-        title: "选择封面图片"
+        title: qsTr("选择封面图片")
         nameFilters: [
-            "图片文件 (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.svg)"
+            qsTr("图片文件 (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.svg)")
         ]
         onAccepted: {
             root.setCover(fileDialog.selectedFile)
@@ -122,7 +122,7 @@ Item {
 
             // ── "设置封面" 文字 ──
             Text {
-                text: "设置封面"
+                text: qsTr("设置封面")
                 font.pixelSize: root.fontSize
                 font.family: appFontFamily
                 font.weight: Font.DemiBold
@@ -220,7 +220,7 @@ Item {
                     spacing: 0
 
                     Text {
-                        text: "更改"
+                        text: qsTr("更改")
                         font.pixelSize: root.fontSize
                         font.family: appFontFamily
                         font.weight: Font.DemiBold
@@ -260,7 +260,7 @@ Item {
                     spacing: 0
 
                     Text {
-                        text: "清除"
+                        text: qsTr("清除")
                         font.pixelSize: root.fontSize
                         font.family: appFontFamily
                         font.weight: Font.Normal

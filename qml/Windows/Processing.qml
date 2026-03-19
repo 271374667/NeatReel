@@ -13,10 +13,10 @@ Item {
     property int totalCurrent: 0
     property int totalCount: 0
     property real stageProgress: 0.0
-    property string stageName: "准备中"
+    property string stageName: qsTr("准备中")
     property string elapsedTime: "00:00:00"
     property real processingSpeed: 0.0
-    property string estimatedRemaining: "0 秒"
+    property string estimatedRemaining: qsTr("0 秒")
     property string projectId: ""
     property int processingStatus: 0 // 0: 进行中, 1: 完成, 2: 错误
     property int displayState: 0
@@ -54,10 +54,10 @@ Item {
     readonly property real displayTotalProgress: processingStatus === 1 ? 1.0 : tp
     readonly property real displayStageProgress: processingStatus === 1 ? 1.0 : sp
     readonly property int displayCurrentCount: processingStatus === 1 && totalCount > 0 ? totalCount : totalCurrent
-    readonly property string displayStageName: processingStatus === 1 ? "完成" : (stageName.length > 0 ? stageName : "准备中")
+    readonly property string displayStageName: processingStatus === 1 ? qsTr("完成") : (stageName.length > 0 ? stageName : qsTr("准备中"))
     readonly property color barColor: processingStatus === 1 ? "#107C10" : processingStatus === 2 ? "#C42B1C" : "#0078D4"
     readonly property string pctText: Math.round(displayTotalProgress * 100) + "%"
-    readonly property string statusText: processingStatus === 1 ? "完成" : processingStatus === 2 ? "错误" : "进行中"
+    readonly property string statusText: processingStatus === 1 ? qsTr("完成") : processingStatus === 2 ? qsTr("错误") : qsTr("进行中")
 
     component StatCard: Rectangle {
         id: statCard
@@ -221,7 +221,7 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredHeight: Math.max(240, root.height * 0.4)
-            title: "处理信息"
+            title: qsTr("处理信息")
             icon: ImagePath.info
             contentTopMargin: 14
             contentLeftMargin: 16
@@ -252,7 +252,9 @@ Item {
                         spacing: 2
 
                         Text {
-                            text: root.totalCount > 0 ? "总任务 " + root.displayCurrentCount + " / " + root.totalCount : "已处理任务 " + root.displayCurrentCount
+                            text: root.totalCount > 0
+                                  ? qsTr("总任务 %1 / %2").arg(root.displayCurrentCount).arg(root.totalCount)
+                                  : qsTr("已处理任务 %1").arg(root.displayCurrentCount)
                             font.pixelSize: 13
                             font.family: appFontFamily
                             font.weight: Font.DemiBold
@@ -350,7 +352,7 @@ Item {
 
                     Text {
                         visible: root.processingStatus === 0 && root.estimatedRemaining.length > 0
-                        text: "预计剩余 " + root.estimatedRemaining
+                        text: qsTr("预计剩余 %1").arg(root.estimatedRemaining)
                         font.pixelSize: 12
                         font.family: appFontFamily
                         color: "#7c8793"
@@ -392,27 +394,27 @@ Item {
 
                         StatCard {
                             Layout.fillWidth: true
-                            title: "已用时间"
+                            title: qsTr("已用时间")
                             value: root.elapsedTime
-                            note: "实时累计"
+                            note: qsTr("实时累计")
                             mono: true
                             big: true
                         }
 
                         StatCard {
                             Layout.fillWidth: true
-                            title: "处理速度"
+                            title: qsTr("处理速度")
                             value: root.processingSpeed.toFixed(1) + "x"
-                            note: "平均速度"
+                            note: qsTr("平均速度")
                             mono: true
                             big: true
                         }
 
                         StatCard {
                             Layout.fillWidth: true
-                            title: "当前状态"
+                            title: qsTr("当前状态")
                             value: root.statusText
-                            note: "项目 " + root.projectId
+                            note: qsTr("项目 %1").arg(root.projectId)
                             valueColor: root.processingStatus === 1 ? "#107C10" : root.processingStatus === 2 ? "#C42B1C" : "#0078D4"
                         }
                     }
@@ -437,7 +439,7 @@ Item {
                             ActionButton {
                                 id: cancelBtn
                                 anchors.right: parent.right
-                                text: "中止"
+                                text: qsTr("中止")
                                 danger: true
                                 onClicked: root.cancelRequested()
                             }
@@ -455,12 +457,12 @@ Item {
                             Behavior on scale { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
                             ActionButton {
-                                text: "继续"
+                                text: qsTr("继续")
                                 onClicked: root.continueRequested()
                             }
 
                             ActionButton {
-                                text: "打开输出目录"
+                                text: qsTr("打开输出目录")
                                 primary: true
                                 onClicked: root.openOutputDir()
                             }
@@ -480,7 +482,7 @@ Item {
                             ActionButton {
                                 id: errorBtn
                                 anchors.right: parent.right
-                                text: "继续"
+                                text: qsTr("继续")
                                 primary: true
                                 onClicked: root.continueRequested()
                             }

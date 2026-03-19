@@ -11,7 +11,7 @@ Window {
     minimumWidth: 620
     minimumHeight: 680
     visible: false
-    title: "关于 - 净影连"
+    title: qsTr("关于 - 净影连")
     color: "#f5f7fa"
     modality: Qt.WindowModal
 
@@ -219,7 +219,7 @@ Window {
 
                     Text {
                         width: parent.width
-                        text: "净影连 NeatReel"
+                        text: qsTr("净影连 NeatReel")
                         font.pixelSize: 36
                         font.family: appFontFamily
                         font.weight: Font.Bold
@@ -229,7 +229,7 @@ Window {
                     }
 
                     Text {
-                        text: "版本 " + aboutService.version
+                        text: qsTr("版本 %1").arg(aboutService.version)
                         width: parent.width
                         font.pixelSize: 18
                         font.family: appFontFamily
@@ -240,7 +240,7 @@ Window {
 
                     Text {
                         width: parent.width
-                        text: "去黑边，正朝向，一键拼出好影像"
+                        text: qsTr("去黑边，正朝向，一键拼出好影像")
                         font.pixelSize: 17
                         font.family: appFontFamily
                         color: "#475467"
@@ -272,7 +272,7 @@ Window {
                     spacing: 12
 
                     Text {
-                        text: "开发者：PythonImporter"
+                        text: qsTr("开发者：PythonImporter")
                         font.pixelSize: 18
                         font.family: appFontFamily
                         font.weight: Font.DemiBold
@@ -285,7 +285,7 @@ Window {
                         spacing: 12
 
                         Text {
-                            text: "联系作者"
+                            text: qsTr("联系作者")
                             font.pixelSize: 15
                             font.family: appFontFamily
                             color: "#475467"
@@ -311,27 +311,29 @@ Window {
             ActionCard {
                 width: parent.width
                 iconSource: ImagePath.question
-                titleText: "帮助"
-                descriptionText: "提交问题或查看已知问题"
+                titleText: qsTr("帮助")
+                descriptionText: qsTr("提交问题或查看已知问题")
                 onClicked: Qt.openUrlExternally("https://github.com/271374667/NeatReel/issues")
             }
 
             ActionCard {
                 width: parent.width
                 iconSource: ImagePath.refresh
-                titleText: "检查更新"
+                titleText: qsTr("检查更新")
                 descriptionText: aboutService.isCheckingForUpdates
-                                 ? "正在从 GitHub 获取最新发布信息..."
+                                 ? qsTr("正在从 GitHub 获取最新发布信息...")
                                  : (aboutService.updateStatusText.length > 0
                                     ? aboutService.updateStatusText
-                                    : "检查 GitHub 发布，获取最新版本信息")
+                                    : qsTr("检查 GitHub 发布，获取最新版本信息"))
                 busy: aboutService.isCheckingForUpdates
                 onClicked: aboutService.checkForUpdates()
             }
 
             Text {
                 width: parent.width
-                text: "\u00A9 " + new Date().getFullYear() + " PythonImporter · 当前许可：" + aboutService.licenseText
+                text: qsTr("\u00A9 %1 PythonImporter · 当前许可：%2")
+                      .arg(new Date().getFullYear())
+                      .arg(aboutService.licenseText)
                 font.pixelSize: 13
                 font.family: appFontFamily
                 color: "#667085"
