@@ -1,32 +1,32 @@
-# 画面裁剪与去黑边
+# Cropping and Border Removal
 
-这是 **净影连** 的主打功能之一，能够自动识别并剔除黑边，还原出最主要的画面。
+This is one of NeatReel's core features: detect black borders automatically and keep the useful frame area.
 
 ![黑边识别](/黑边识别.png)
 
-### 🤖 智能自动识别
+### 🤖 Automatic Detection
 
-在你将视频导入后，**净影连 (NeatReel)** 会自动对视频帧进行边缘扫描：
-1. **采样分析**：通过多帧采样识别非像素内容区域。
-2. **计算裁剪框**：自动确定一个最佳的裁剪范围。
-3. **即刻生效**：在预览区你可以实时看到去黑边后的结果。
+After import, NeatReel scans video frames and:
+1. Samples multiple frames to detect non-content areas
+2. Computes a practical crop rectangle automatically
+3. Applies the result directly to the preview
 
-您可以直接在右侧的预览区域看到最终的输出结果，在开始处理前确认视频是否符合您的预期。
+This lets you confirm the crop before export instead of discovering a bad border cut afterward.
 
 ![主页_预览画面区域](/主页_预览画面区域.png)
 
-### ✂️ 手动精准裁剪
+### ✂️ Manual Crop Control
 
-如果自动识别的结果无法完全满足要求，你可以点击视频详情区的“手动裁剪”：
-- **可视化选区**：直接拖动裁剪框覆盖你想保留的画面。
-- **预览模式**：在裁剪时可即时看到预览。
+If auto-detection is not precise enough, use **Manual Crop**:
+- **Visual selection**: drag the crop box directly over the area you want to keep
+- **Immediate preview**: see the result while adjusting
 
-::: info 行为细节
-手动裁剪窗口始终基于原始未旋转帧工作，保存的也是源视频坐标。确认后，当前视频会重新启用裁剪流程，最终输出时会自动收敛到合法范围，并对齐为偶数宽高。
+::: info Behavior details
+The manual crop window always works in the original unrotated frame space, and saved values remain in source-video coordinates. During export, they are normalized into a valid range and aligned to even dimensions.
 :::
 
 ![手动剪裁画面](/手动剪裁画面.png)
 
-::: tip 💡 提示
-对于某些带有浮动边缘黑影的老旧视频，手动裁剪模式效果最稳定。
+::: tip 💡 Tip
+For older videos with unstable dark edges or shadows, manual crop is often the most reliable option.
 :::

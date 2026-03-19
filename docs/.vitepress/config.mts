@@ -212,64 +212,136 @@ function renderDocImage(token: any) {
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   base: '/NeatReel/',
-  title: "净影连 NeatReel",
-  description: "去黑边，正朝向，一键拼出好影像",
   markdown: {
     config(md) {
       md.renderer.rules.image = (tokens, index) => renderDocImage(tokens[index])
     }
   },
-  themeConfig: {
-    logo: '/logo.png',
-
-    nav: [
-      { text: '首页', link: '/' },
-      { text: '指南', link: '/guide/introduction' }
-    ],
-
-    sidebar: [
-      {
-        text: '使用指南',
-        items: [
-          { text: '安装与系统要求', link: '/guide/system-requirements' },
-          { text: '项目简介', link: '/guide/introduction' },
-          { text: '第一次使用', link: '/guide/getting-started' },
-          { text: '导入、排序与输出流程', link: '/guide/workflow' },
-        ]
-      },
-      {
-        text: '核心功能',
-        items: [
-          { text: '画面裁剪与去黑边', link: '/features/crop' },
-          { text: '旋转校正', link: '/features/rotation' },
-          { text: '实时预览', link: '/features/preview' },
-          { text: '输出模式与硬件加速', link: '/features/export' },
-          { text: '设置封面', link: '/features/cover' },
-          { text: '多种格式支持', link: '/features/formats' },
-        ]
-      },
-      {
-        text: '进阶开发',
-        items: [
-          { text: '开发与构建', link: '/guide/build' },
-          { text: '故障排查与限制', link: '/guide/faq' }
-        ]
-      },
-      {
-        text: '关于我',
-        items: [
-          { text: '作者的话', link: '/about/author' }
-        ]
+  locales: {
+    root: {
+      label: 'English',
+      lang: 'en-US',
+      title: 'NeatReel',
+      description: 'Remove borders, fix orientation, and stitch better videos in one click',
+      themeConfig: {
+        logo: '/logo.png',
+        nav: [
+          { text: 'Home', link: '/' },
+          { text: 'Guide', link: '/guide/introduction' },
+          {
+            text: 'Language',
+            items: [
+              { text: 'English', link: '/' },
+              { text: '简体中文', link: '/zh/' }
+            ]
+          }
+        ],
+        sidebar: [
+          {
+            text: 'Guide',
+            items: [
+              { text: 'Installation and Requirements', link: '/guide/system-requirements' },
+              { text: 'Introduction', link: '/guide/introduction' },
+              { text: 'Getting Started', link: '/guide/getting-started' },
+              { text: 'Import, Sorting, and Export Workflow', link: '/guide/workflow' }
+            ]
+          },
+          {
+            text: 'Core Features',
+            items: [
+              { text: 'Cropping and Border Removal', link: '/features/crop' },
+              { text: 'Rotation Correction', link: '/features/rotation' },
+              { text: 'Real-time Preview', link: '/features/preview' },
+              { text: 'Export Modes and Hardware Acceleration', link: '/features/export' },
+              { text: 'Cover Image', link: '/features/cover' },
+              { text: 'Supported Formats', link: '/features/formats' }
+            ]
+          },
+          {
+            text: 'Development',
+            items: [
+              { text: 'Development and Build', link: '/guide/build' },
+              { text: 'Troubleshooting and Limits', link: '/guide/faq' }
+            ]
+          },
+          {
+            text: 'About',
+            items: [
+              { text: "Author's Note", link: '/about/author' }
+            ]
+          }
+        ],
+        socialLinks: [
+          { icon: 'github', link: 'https://github.com/271374667/NeatReel' }
+        ],
+        footer: {
+          message: 'Released under LGPL v3',
+          copyright: 'Copyright © 2026-present PythonImporter'
+        }
       }
-    ],
-
-    socialLinks: [
-      { icon: 'github', link: 'https://github.com/271374667/NeatReel' }
-    ],
-
-    footer: {
-      message: '基于 LGPL v3 协议发布',
-      copyright: 'Copyright © 2026-present PythonImporter'
+    },
+    zh: {
+      label: '简体中文',
+      lang: 'zh-CN',
+      link: '/zh/',
+      title: '净影连 NeatReel',
+      description: '去黑边，正朝向，一键拼出好影像',
+      themeConfig: {
+        logo: '/logo.png',
+        nav: [
+          { text: '首页', link: '/zh/' },
+          { text: '指南', link: '/zh/guide/introduction' },
+          {
+            text: '语言',
+            items: [
+              { text: 'English', link: '/' },
+              { text: '简体中文', link: '/zh/' }
+            ]
+          }
+        ],
+        sidebar: [
+          {
+            text: '使用指南',
+            items: [
+              { text: '安装与系统要求', link: '/zh/guide/system-requirements' },
+              { text: '项目简介', link: '/zh/guide/introduction' },
+              { text: '第一次使用', link: '/zh/guide/getting-started' },
+              { text: '导入、排序与输出流程', link: '/zh/guide/workflow' }
+            ]
+          },
+          {
+            text: '核心功能',
+            items: [
+              { text: '画面裁剪与去黑边', link: '/zh/features/crop' },
+              { text: '旋转校正', link: '/zh/features/rotation' },
+              { text: '实时预览', link: '/zh/features/preview' },
+              { text: '输出模式与硬件加速', link: '/zh/features/export' },
+              { text: '设置封面', link: '/zh/features/cover' },
+              { text: '多种格式支持', link: '/zh/features/formats' }
+            ]
+          },
+          {
+            text: '进阶开发',
+            items: [
+              { text: '开发与构建', link: '/zh/guide/build' },
+              { text: '故障排查与限制', link: '/zh/guide/faq' }
+            ]
+          },
+          {
+            text: '关于我',
+            items: [
+              { text: '作者的话', link: '/zh/about/author' }
+            ]
+          }
+        ],
+        socialLinks: [
+          { icon: 'github', link: 'https://github.com/271374667/NeatReel' }
+        ],
+        footer: {
+          message: '基于 LGPL v3 协议发布',
+          copyright: 'Copyright © 2026-present PythonImporter'
+        }
+      }
     }
   }
 })

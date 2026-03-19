@@ -1,94 +1,94 @@
-# 第一次使用：从导入到导出
+# Getting Started: From Import to Export
 
-开启 **净影连**（NeatReel）的第一步，是先确保你已经下载好 Release 版本，或已按开发文档准备好源码运行环境。
+Before you start, make sure you have either downloaded the release build or prepared the source environment described in the development guide.
 
-最新下载地址：<https://github.com/271374667/NeatReel/releases/latest>
+Latest download: <https://github.com/271374667/NeatReel/releases/latest>
 
-## 第一步：导入视频
+## Step 1: Import Videos
 
-你可以通过以下两种方式导入素材：
+You can import clips in two ways:
 
-- **拖拽导入（推荐）**：直接将多个视频文件拖入左侧列表。
-- **文件选择**：点击左侧列表区域的“添加视频”按钮。
+- **Drag and drop (recommended)**: drag multiple files into the list on the left.
+- **File picker**: click the **Add Videos** button in the list area.
 
-::: tip 提示
-当前界面直接接收的是视频文件，不会自动展开文件夹。若你拖入的是文件夹，软件会忽略它。
+::: tip Note
+The current UI accepts video files directly. It does not expand folders automatically, so dropped folders will be ignored.
 :::
 
-当前白名单支持的常见扩展名包括：
+Common supported extensions:
 
 `mp4`、`mkv`、`mov`、`avi`、`webm`、`flv`、`wmv`、`m4v`、`mpg`、`mpeg`、`3gp`、`3g2`、`f4v`、`rm`、`rmvb`、`asf`
 
 ![主页拖放视频](/主页_拖放视频.webp)
 
-## 第二步：整理顺序
+## Step 2: Organize Order
 
-导入完成后，左侧列表就是最终处理顺序。你可以使用以下方式整理素材：
+After import, the list order becomes the processing order. You can adjust it in several ways:
 
-- **右键智能排序**：支持“智能升序”和“智能降序”。对于纯数字文件名、Windows 重命名风格、日期风格文件名，排序结果会更符合直觉。
-- **手动拖拽排序**：长按单个项目后上下拖动，适合最后微调顺序。
-- **多选与删除**：
+- **Right-click smart sorting**: useful for numbered, date-like, or Windows-style renamed files.
+- **Manual drag sorting**: press and hold an item, then drag it up or down.
+- **Multi-select and delete**:
   - `Ctrl + A`：全选
   - `Ctrl + D`、`Delete`、`Backspace`：删除选中项
   - `Ctrl + 鼠标左键`：单个增减选中
   - `Shift + 鼠标左键`：连续范围选择
 
-## 第三步：预览、旋转与去黑边
+## Step 3: Preview, Rotate, and Remove Borders
 
-选中左侧某个视频后，右侧顶部会显示该视频的处理后预览。
+After you select a video, the right side shows its processed preview.
 
-1. **查看处理后预览**：默认看到的是应用去黑边和方向修正后的结果。
-2. **切换回原视频**：点击“使用原始视频”，可以直接对照当前自动去黑边结果是否合理。
-3. **手动旋转**：如果朝向不对，可点击“顺时针旋转 90°”或“逆时针旋转 90°”。
+1. **Preview the processed result**: by default, the preview reflects border removal and orientation correction.
+2. **Switch back to the original**: use **Use Original Video** to compare the automatic result with the source.
+3. **Rotate manually**: if orientation is wrong, use the clockwise or counterclockwise 90° buttons.
 
-::: info 自动旋转规则
-当某个视频还没有被你手动旋转过时，软件会根据当前横屏/竖屏输出方向自动推荐 `0°` 或 `90°`。一旦你手动改过旋转角度，后续就完全以你的 `0/90/180/270` 设置为准。
+::: info Auto-rotation rule
+If a clip has not been rotated manually, the app can recommend `0°` or `90°` based on the chosen output orientation. Once you rotate a clip manually, your own `0/90/180/270` value takes priority.
 :::
 
 ![主页_旋转视频](/主页_旋转视频.webp)
 
-## 第四步：需要时再手动裁剪
+## Step 4: Use Manual Crop When Needed
 
-如果自动去黑边结果不理想，可以打开“手动剪裁”：
+If the automatic crop is not good enough, open **Manual Crop**:
 
-1. 点击“手动剪裁”按钮。
-2. 在弹出窗口中拖动裁剪框。
-3. 确认后，裁剪结果会回写到当前视频条目。
+1. Click **Manual Crop**.
+2. Drag the crop frame in the popup window.
+3. Confirm the crop and apply it back to the current video item.
 
-::: tip 手动裁剪的真实行为
-手动裁剪页面始终基于原始未旋转帧工作，保存的也是源视频坐标。确认后，当前视频会自动重新启用裁剪流程，最终输出时会自动修正到合法范围并对齐为偶数宽高。
+::: tip Actual behavior
+The manual crop page always works on the original unrotated frame and stores crop coordinates in source-video space. On export, they are normalized to a valid range and aligned to even dimensions.
 :::
 
 ![手动剪裁页面](/手动剪裁页面.webp)
 
-## 第五步：配置输出
+## Step 5: Configure Output
 
-右侧“输出配置”面板包含四类关键信息：
+The **Output Settings** panel contains four key areas:
 
-1. **画面方向**：决定最终统一输出为横屏还是竖屏。
-2. **输出视频**：
-   - `合并成一个视频`：把所有片段合成为一个 `.mp4`
-   - `分别输出`：把每个片段单独导出
-3. **高级设置**：
-   - `处理模式`：速度、均衡、质量、GPU
-   - `启动自动剪裁`：会同时影响当前列表中的项目以及后续新导入项目
-4. **附加信息**：
-   - `视频封面`：把图片作为输出文件的附加封面写入
-   - `输出文件夹`：默认是程序根目录下的 `output/`
+1. **Orientation**: choose a unified landscape or portrait output.
+2. **Output mode**:
+   - `Merge into One Video`
+   - `Export Separately`
+3. **Advanced settings**:
+   - `Processing Mode`: Speed, Balanced, Quality, GPU
+   - `Enable Auto Crop`: affects current items and future imports
+4. **Extras**:
+   - `Video Cover`: attach an image as a cover stream
+   - `Output Folder`: defaults to `output/` under the program root
 
 ![主页_高级设置和输出](/主页_高级设置和输出.webp)
 
-## 第六步：开始处理并查看结果
+## Step 6: Start Processing and Check Results
 
-点击右下角的 **“开始处理”** 后，会进入处理页：
+After clicking **Start Processing**, the app opens the processing page:
 
-- 页面会显示总进度、当前文件进度、处理速度、已用时间和预计剩余时间。
-- 处理中可点击“中止”。
-- 完成后可点击“打开输出目录”直接查看结果。
+- It shows total progress, current file progress, speed, elapsed time, and estimated remaining time.
+- You can abort while processing.
+- When finished, you can open the output folder directly.
 
-输出命名规则如下：
+Output naming:
 
-- **合并成一个视频**：生成一个 8 位项目 ID 命名的文件，例如 `a1b2c3d4.mp4`
-- **分别输出**：先生成一个 8 位项目 ID 目录，再输出 `0001.mp4`、`0002.mp4`……
+- **Merge mode**: one `.mp4` file named with an 8-character project ID, for example `a1b2c3d4.mp4`
+- **Separate mode**: one folder named with an 8-character project ID, then `0001.mp4`, `0002.mp4`, and so on
 
 ![输出完成](/输出完成.png)

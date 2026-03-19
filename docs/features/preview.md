@@ -1,24 +1,24 @@
-# 实时预览
+# Real-time Preview
 
-**净影连** 在正式导出前就能把结果先展示出来，避免处理完才发现方向、裁剪或黑边不符合预期。
+NeatReel shows the result before export, which helps you catch orientation, cropping, or border issues early.
 
 ![实时预览海报](/实时预览海报.png)
 
-### 👁️ 双视图切换
+### 👁️ Dual View Switching
 
-在输出之前，预览区提供了两种非常实用的视图模式：
-1. **原视频预览**：查看素材原始画面，方便对照源文件状态。
-2. **处理后预览**：查看应用了 **去黑边、裁剪和旋转** 之后的模拟成片画面。
+The preview area offers two useful modes:
+1. **Original preview**: inspect the raw source frame
+2. **Processed preview**: inspect the simulated output after border removal, crop, and rotation
 
 ![主页_预览画面区域](/主页_预览画面区域.png)
 
-### ✅ 导出前先确认结果
+### ✅ Confirm Before Export
 
-“处理后预览”适合用来快速检查这些关键问题：
-- **比例是否协调**：横竖屏统一后，主体是否仍然居中自然。
-- **黑边是否清理干净**：自动裁剪后是否还有残留边框。
-- **方向是否正确**：旋转调整后，画面是否已经恢复正常朝向。
+Processed preview is useful for checking:
+- Whether the framing still looks natural after orientation normalization
+- Whether black borders were fully removed
+- Whether the final orientation is correct
 
-::: info 💡 价值
-预览先行，可以把问题留在导出前解决，减少重复试错和无效等待。
+::: info 💡 Why it matters
+Preview-first workflows reduce wasted export time and repeated trial-and-error.
 :::

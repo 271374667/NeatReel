@@ -1,104 +1,104 @@
-# 导入、排序与输出流程
+# Import, Sorting, and Export Workflow
 
-这一页把主界面的高频操作串起来说明，适合在你已经完成安装之后，用来快速建立对整个工作流的认识。
+This page connects the main interface actions into one practical workflow and is useful once the app is already installed.
 
-## 1. 导入素材
+## 1. Import Files
 
-左侧列表是整个流程的起点，支持两种导入方式：
+The list on the left is the starting point. It supports:
 
-- 直接把多个视频文件拖进列表
-- 点击“添加视频”按钮手动选择文件
+- Dragging multiple video files into the list
+- Clicking **Add Videos** and selecting files manually
 
 当前界面接受的是视频文件本身，不会自动展开文件夹。支持的常见扩展名包括：
 
 `mp4`、`mkv`、`mov`、`avi`、`webm`、`flv`、`wmv`、`m4v`、`mpg`、`mpeg`、`3gp`、`3g2`、`f4v`、`rm`、`rmvb`、`asf`
 
-::: tip 提示
-导入时当前不会自动去重。如果你多次加入同一个文件，列表中会出现多个条目。
+::: tip Note
+The current import flow does not deduplicate files. If you add the same file multiple times, it will appear multiple times in the list.
 :::
 
-## 2. 排序与批量操作
+## 2. Sorting and Batch Actions
 
-导入完成后，列表顺序就是后续处理顺序。你可以这样整理：
+After import, the list order becomes the processing order. You can adjust it like this:
 
-- **智能升序 / 智能降序**：右键菜单可用，适合文件名本身有顺序规律时快速整理
-- **手动拖拽排序**：长按单个条目后拖动
-- **置顶 / 置底**：对单个条目快速调整位置
-- **删除**：可删单项，也可删除多选项
+- **Smart Ascending / Smart Descending**: useful when filenames already contain sequence information
+- **Manual drag sorting**: press and hold an item, then drag
+- **Move to Top / Move to Bottom**
+- **Delete**: remove one item or multiple selected items
 
-当前批量选择快捷键如下：
+Batch selection shortcuts:
 
 - `Ctrl + A`：全选
 - `Ctrl + D`、`Delete`、`Backspace`：删除选中项
 - `Ctrl + 鼠标左键`：增减单个选中
 - `Shift + 鼠标左键`：连续选中范围
 
-智能排序的判断逻辑大致是：
+The smart sort logic roughly works like this:
 
-- 文件名全为数字时按数字排序
-- 符合 Windows 重命名风格（例如 `文件 (12)`）时按括号数字排序
-- 包含日期格式（例如 `2026-03-17`）时按日期排序
-- 其它情况回退到普通字符串排序
+- Pure numeric names sort numerically
+- Windows rename style names like `File (12)` sort by the number in parentheses
+- Date-like names sort by date
+- Everything else falls back to normal string sorting
 
-## 3. 预览与单项调整
+## 3. Preview and Per-file Adjustments
 
-选中左侧某个视频后，右侧“视频详情”会展示它的当前处理结果。
+After selecting a clip, the **Video Details** section shows its current processed result.
 
-你可以在这里完成四件事：
+You can do four important things here:
 
-1. **查看预览**
-2. **切换“使用原始视频”与自动裁剪结果**
-3. **手动顺时针 / 逆时针旋转 90°**
-4. **打开手动裁剪窗口**
+1. Preview the result
+2. Switch between the original and the processed view
+3. Rotate 90° clockwise or counterclockwise
+4. Open the manual crop window
 
-需要注意的真实行为：
+Important behavior details:
 
-- 自动旋转只对“你还没手动改过旋转”的视频生效
-- 自动旋转只会推荐 `0°` 或 `90°`
-- 手动裁剪页面使用的是原始未旋转帧坐标
-- 确认手动裁剪后，当前条目会重新启用裁剪流程，并在输出时自动修正为合法范围
+- Auto-rotation only applies to clips you have not rotated manually
+- Auto-rotation only recommends `0°` or `90°`
+- Manual crop works in original unrotated frame coordinates
+- Confirming manual crop re-enables crop handling for the current item and normalizes the stored area on export
 
-## 4. 全局输出配置
+## 4. Global Output Settings
 
-右侧下半部分的“输出配置”决定整个任务最终怎么导出。
+The lower-right **Output Settings** panel controls how the whole job is exported.
 
-### 画面方向
+### Orientation
 
-- **横屏**
-- **竖屏**
+- **Landscape**
+- **Portrait**
 
-这个选项会影响自动旋转推荐和最终输出方向。
+This affects both auto-rotation recommendations and the final output direction.
 
-### 输出视频
+### Output Mode
 
-- **合并成一个视频**：把当前列表中的所有片段顺序合并
-- **分别输出**：逐个导出整理后的片段
+- **Merge into One Video**: combine all clips into one file
+- **Export Separately**: export each cleaned-up clip individually
 
-命名规则如下：
+Naming rules:
 
-- 合并模式：生成一个 8 位项目 ID 命名的 `.mp4`
-- 分别输出：生成一个 8 位项目 ID 目录，内部依次为 `0001.mp4`、`0002.mp4`……
+- Merge mode: one `.mp4` file named with an 8-character project ID
+- Separate mode: one folder named with an 8-character project ID containing `0001.mp4`, `0002.mp4`, and so on
 
-### 高级设置
+### Advanced Settings
 
-- **处理模式**：速度、均衡、质量、GPU
-- **启动自动剪裁**：会同步影响当前列表项目以及后续新导入项目
-- **视频封面**：写入输出文件的附加封面
-- **输出文件夹**：默认是程序根目录下的 `output/`
+- **Processing Mode**: Speed, Balanced, Quality, GPU
+- **Enable Auto Crop**: affects both current items and future imported items
+- **Video Cover**: writes an attached cover image into the exported file
+- **Output Folder**: defaults to `output/` under the program root
 
-## 5. 处理页与结果查看
+## 5. Processing Page and Results
 
-点击右下角“开始处理”后，会进入处理页。这里会实时显示：
+After clicking **Start Processing**, the processing page shows:
 
-- 总进度
-- 当前文件进度
-- 处理速度
-- 已用时间
-- 预计剩余时间
-- 当前状态
+- Total progress
+- Current file progress
+- Processing speed
+- Elapsed time
+- Estimated remaining time
+- Current status
 
-处理中可以中止；完成后可以继续返回主界面，也可以直接点击“打开输出目录”查看结果。
+You can abort while processing. When the task finishes, you can go back or open the output folder directly.
 
-::: warning Windows 行为
-“打开输出目录”当前通过 `Explorer` 打开目标文件夹，这也是为什么当前版本主要围绕 Windows 使用场景设计。
+::: warning Windows behavior
+The **Open Output Folder** action currently uses `Explorer`, which is one reason the current release is primarily designed around Windows.
 :::

@@ -1,60 +1,60 @@
-# 故障排查与限制
+# Troubleshooting and Limits
 
-这里汇总了使用 **净影连** 时最常见的问题，以及当前实现中需要提前知道的限制。
+This page collects common questions and a few current implementation limits you should know in advance.
 
-### Q1：软件支持哪些系统？
+### Q1: Which systems are supported?
 
-当前版本主要面向 **Windows 10 64 位** 与 **Windows 11 64 位**。文档与代码中的单实例处理、打开输出目录等行为都以 Windows 为主，其它系统没有作为正式支持目标。
+The current release mainly targets **Windows 10 64-bit** and **Windows 11 64-bit**. Single-instance handling and opening the output folder are implemented with Windows behavior in mind.
 
-### Q2：为什么我执行 `uv sync` 后，直接运行源码会失败？
+### Q2: Why can source startup fail even after `uv sync`?
 
-因为当前入口 `NeatReel.py` 默认 `DEBUG=False`，源码运行时会优先加载编译后的 Qt 资源。如果本地还没有 `src/resources/qml_resources.py`，请先执行：
+Because `NeatReel.py` currently defaults to `DEBUG=False`, source runs prefer compiled Qt resources. If `src/resources/qml_resources.py` does not exist yet, run:
 
 ```bash
 uv run python scripts/compile.py
 uv run python NeatReel.py
 ```
 
-如果你想直接加载本地 `qml/` 文件调试，也可以手动把 `NeatReel.py` 中的 `DEBUG` 改成 `True`。
+If you want to debug directly against local `qml/` files, set `DEBUG=True` manually.
 
-### Q3：为什么我的 GPU 模式无法正常工作？
+### Q3: Why does GPU mode fail on my machine?
 
-当前 GPU 模式走的是 **NVIDIA 的 `av1_nvenc` 编码路径**。如果显卡型号、驱动版本或硬件编码能力不满足要求，就可能处理失败。遇到这种情况时，直接切回 **速度 / 均衡 / 质量** 模式即可。
+GPU mode currently uses **NVIDIA `av1_nvenc`**. If your GPU model, driver, or hardware encoding capability is not sufficient, processing may fail. In that case, switch back to **Speed / Balanced / Quality**.
 
-### Q4：为什么有些视频导不进来，或者能导入但处理时报错？
+### Q4: Why do some videos fail to import or process?
 
-界面层当前只放行以下常见扩展名：
+The UI currently allows these common extensions:
 
 `mp4`、`mkv`、`mov`、`avi`、`webm`、`flv`、`wmv`、`m4v`、`mpg`、`mpeg`、`3gp`、`3g2`、`f4v`、`rm`、`rmvb`、`asf`
 
-但扩展名通过并不代表一定能成功处理，最终仍取决于本机 `PyAV / FFmpeg` 对该文件内部编码组合的支持情况。
+But matching the extension whitelist does not guarantee successful processing. The final result still depends on whether your local `PyAV / FFmpeg` stack supports the actual internal codec combination.
 
-### Q5：默认输出位置在哪里？为什么找不到结果文件？
+### Q5: Where is the default output folder?
 
-默认输出目录始终叫做 `output/`，但它所在的位置取决于运行方式：
+The default output directory is always named `output/`, but its location depends on how the app is launched:
 
-- **源码运行**：位于仓库根目录
-- **打包运行**：位于 `exe` 所在目录
+- **Source run**: repository root
+- **Packaged run**: the same directory as the `exe`
 
-输出命名规则如下：
+Output naming:
 
-- **合并成一个视频**：生成一个 8 位项目 ID 命名的 `.mp4`
-- **分别输出**：生成一个 8 位项目 ID 目录，里面依次是 `0001.mp4`、`0002.mp4`……
+- **Merge into one video**: an `.mp4` named with an 8-character project ID
+- **Export separately**: a folder named with an 8-character project ID containing `0001.mp4`, `0002.mp4`, and so on
 
-### Q6：自动去黑边不准怎么办？
+### Q6: What if auto border removal is not accurate enough?
 
-可以按这个顺序处理：
+Recommended order:
 
-1. 先点击“使用原始视频”，对照当前自动去黑边结果是否合理。
-2. 如果自动结果不满意，再打开“手动剪裁”。
-3. 手动裁剪页面使用的是原始未旋转帧坐标，确认后会重新启用当前视频的裁剪流程，并在最终输出时自动修正到合法范围与偶数宽高。
+1. Click **Use Original Video** and compare the automatic result with the source.
+2. If it still looks wrong, open **Manual Crop**.
+3. Manual crop works in original unrotated coordinates and is normalized on export.
 
-### Q7：为什么不能同时打开两个软件窗口？
+### Q7: Why can't I open two app windows at the same time?
 
-这是当前实现的既定行为。软件只允许单实例运行，重复启动时会尝试唤起已经打开的主窗口，而不是再开一个新的处理实例。
+That is by design. The app only allows a single running instance and will bring the existing window to the front instead of starting another one.
 
-### Q8：合并时可以增加背景音乐（BGM）吗？
+### Q8: Can I add BGM when merging?
 
-**净影连** 的定位是“整理与拼接工具”，而不是完整的非线性剪辑器。当前版本不支持多音轨编辑、外挂 BGM、字幕时间线等能力。
+No. **NeatReel** is positioned as a cleanup-and-merge tool rather than a full nonlinear editor. It does not currently support multi-track editing, external BGM, or subtitle timelines.
 
 ![输出完成](/输出完成.png)

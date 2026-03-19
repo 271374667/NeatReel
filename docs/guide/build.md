@@ -1,110 +1,110 @@
-# 开发与构建
+# Development and Build
 
-本章节详细介绍如何从源代码运行、打包 **净影连 / NeatReel**，以及如何构建文档站。项目推荐使用 [uv](https://github.com/astral-sh/uv) 进行 Python 依赖管理。
+This section explains how to run **NeatReel** from source, build the Windows package, and work on the documentation site. The project recommends [uv](https://github.com/astral-sh/uv) for Python dependency management.
 
-## 🛠️ 环境依赖
+## 🛠️ Environment
 
-### 应用本体
+### App
 
 - **Python 3.11+**
-- **uv**：用于同步依赖与执行脚本
-- **Windows 10/11 64 位**：当前主要验证平台
+- **uv**: used to sync dependencies and run scripts
+- **Windows 10/11 64-bit**: the main verified platform
 
-主要依赖库包括：
+Key dependencies include:
 
-- **PySide6**：提供 GUI 与 QML 集成
-- **av (PyAV)**：负责视频读取、编码与容器写入
-- **Pillow / numpy / scipy**：参与预览、图像与边界检测流程
-- **qthreadwithreturn**：负责异步更新检查等线程任务
+- **PySide6**: GUI and QML integration
+- **av (PyAV)**: video reading, encoding, and container output
+- **Pillow / numpy / scipy**: preview, image processing, and border detection
+- **qthreadwithreturn**: asynchronous thread tasks such as update checks
 
-### 文档站
+### Docs Site
 
-如果你需要修改 `docs/` 文档站，还需要准备：
+If you want to work on `docs/`, you also need:
 
-- **Bun**：与仓库中的 `bun.lock` 及 CI 工作流保持一致
+- **Bun**: to stay aligned with `bun.lock` and CI
 
-## ▶️ 源码运行
+## ▶️ Run from Source
 
-1. 同步依赖：
+1. Sync dependencies:
 
    ```bash
    uv sync
    ```
 
-2. 生成 Qt 资源文件：
+2. Compile Qt resources:
 
    ```bash
    uv run python scripts/compile.py
    ```
 
-3. 启动应用：
+3. Start the app:
 
    ```bash
    uv run python NeatReel.py
    ```
 
-::: warning 入口默认行为
-当前 `NeatReel.py` 默认 `DEBUG=False`，这意味着源码运行时会优先加载编译后的 Qt 资源。如果你跳过 `scripts/compile.py`，并且本地还没有 `src/resources/qml_resources.py`，启动可能直接失败。
+::: warning Default entry behavior
+`NeatReel.py` currently defaults to `DEBUG=False`, which means source runs load compiled Qt resources first. If you skip `scripts/compile.py` and do not already have `src/resources/qml_resources.py`, startup may fail immediately.
 :::
 
-如果你在开发 QML 界面，希望直接加载本地 `qml/` 文件，可以手动把 `NeatReel.py` 中的 `DEBUG` 改成 `True`。
+If you are iterating on the QML UI and want to load local `qml/` files directly, set `DEBUG=True` in `NeatReel.py`.
 
-## 🏗️ Windows 打包
+## 🏗️ Windows Packaging
 
-项目内置了自动化构建脚本，支持快速打包成可执行文件（`.exe`）：
+The repository already includes a build script for packaging a Windows executable:
 
 ```bash
 uv run python scripts/build.py
 ```
 
-该脚本会自动执行以下步骤：
+The script performs these steps automatically:
 
-1. 先调用 `scripts/compile.py` 重新生成 `src/resources/qml_resources.qrc` 与 `src/resources/qml_resources.py`
-2. 写入专用的发布入口 `_release_main.py`
-3. 通过 `PyInstaller` 生成 Windows one-dir 产物
+1. Run `scripts/compile.py` to regenerate `src/resources/qml_resources.qrc` and `src/resources/qml_resources.py`
+2. Write the dedicated release launcher `_release_main.py`
+3. Use `PyInstaller` to produce the Windows one-dir output
 
-如果执行打包时提示缺少 `PyInstaller`，请先确认本地已经同步了开发依赖。
+If `PyInstaller` is missing during build, check that your local environment is fully synced.
 
-打包完成后，输出位于：
+Build output:
 
 - `dist/NeatReel/`
 
-## 📝 文档站开发
+## 📝 Docs Development
 
-如果你修改了 `docs/`：
+If you change files under `docs/`:
 
-1. 安装前端依赖：
+1. Install frontend dependencies:
 
    ```bash
    bun install --frozen-lockfile
    ```
 
-2. 本地预览：
+2. Run a local preview:
 
    ```bash
    bun run docs:dev
    ```
 
-3. 构建静态站点：
+3. Build the static site:
 
    ```bash
    bun run docs:build
    ```
 
-4. 预览构建结果：
+4. Preview the built result:
 
    ```bash
    bun run docs:preview
    ```
 
-## 📂 目录结构说明
+## 📂 Directory Overview
 
-- **`NeatReel.py`**：桌面应用入口
-- **`src/`**：后端核心逻辑，包含预览、读取、合并、服务层等
-- **`qml/`**：QML 界面代码，`qml/Fonts/` 与 `qml/Images/` 会被编译进 Qt 资源系统
-- **`scripts/`**：资源编译与 PyInstaller 打包脚本
-- **`docs/`**：VitePress 文档站
+- **`NeatReel.py`**: desktop app entry
+- **`src/`**: backend logic including preview, reading, merge, and service layers
+- **`qml/`**: QML UI code; `qml/Fonts/` and `qml/Images/` are compiled into Qt resources
+- **`scripts/`**: resource compilation and PyInstaller build scripts
+- **`docs/`**: VitePress documentation site
 
-::: tip 💡 提示
-如果你想修改界面样式，可以重点关注 `qml/Windows/` 下的各个页面文件。
+::: tip 💡 Tip
+If you want to change the UI, the most important files are usually under `qml/Windows/`.
 :::

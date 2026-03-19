@@ -1,46 +1,46 @@
-# 安装与系统要求
+# Installation and System Requirements
 
-本页用于回答两个最常见的问题：**我能不能直接用？** 以及 **我需要准备什么环境？**
+This page answers two practical questions: **Can I use it directly?** and **What environment do I need?**
 
-## 普通用户
+## For Regular Users
 
-如果你只是想使用软件本体，推荐直接前往 Release 下载最新版本：
+If you only want to use the app, download the latest release here:
 
 <https://github.com/271374667/NeatReel/releases/latest>
 
-当前建议环境如下：
+Recommended environment:
 
-- **操作系统**：Windows 10 64 位、Windows 11 64 位
-- **运行方式**：下载后直接运行 `NeatReel.exe`
-- **默认输出位置**：程序根目录下的 `output/`
+- **Operating system**: Windows 10 64-bit or Windows 11 64-bit
+- **How to run**: download and launch `NeatReel.exe`
+- **Default output location**: `output/` under the program root
 
-::: warning 平台说明
-当前版本的单实例处理、打开输出目录等行为都围绕 Windows 设计。macOS、Linux 或更老的 Windows 版本没有作为正式支持目标。
+::: warning Platform note
+The current implementation is built around Windows behavior, including single-instance handling and opening the output folder with Explorer. macOS, Linux, and older Windows versions are not official targets.
 :::
 
-## GPU 模式要求
+## GPU Mode Requirements
 
-如果你准备使用 GPU 模式，请额外确认以下条件：
+If you plan to use GPU mode, confirm the following first:
 
-- 使用 **NVIDIA 显卡**
-- 显卡与驱动具备当前编码路径所需的硬件能力
-- 若 GPU 模式失败，可直接切回 **速度 / 均衡 / 质量** 三种 CPU 模式
+- You are using an **NVIDIA GPU**
+- Your GPU and driver support the current encoding path
+- If GPU mode fails, switch back to **Speed / Balanced / Quality**
 
-## 源码运行环境
+## Source Environment
 
-如果你准备从源码运行或参与开发，请准备：
+If you want to run from source or contribute, prepare:
 
 - **Python 3.11+**
-- **uv**：推荐的 Python 依赖管理工具
-- **Bun**：仅在修改 `docs/` 文档站时需要
+- **uv**: the recommended Python dependency manager
+- **Bun**: only needed when working on the `docs/` site
 
-建议先阅读：
+You may also want to read:
 
-- [第一次使用](/guide/getting-started)
-- [开发与构建](/guide/build)
+- [Getting Started](/guide/getting-started)
+- [Development and Build](/guide/build)
 
-## 你还需要知道的限制
+## Practical Limits
 
-- 软件当前只允许单实例运行，重复启动会唤起已打开窗口。
-- 输入格式有扩展名白名单，但最终能否成功处理，仍取决于本机 `PyAV / FFmpeg` 对具体编码组合的支持。
-- 软件定位是“整理与拼接工具”，不提供时间线剪辑、BGM 混音、字幕编辑等完整非编能力。
+- The app only allows one running instance at a time.
+- File extensions are filtered by a whitelist, but successful processing still depends on your local `PyAV / FFmpeg` support for the actual codec combination.
+- The app is positioned as a cleanup-and-merge tool, not a full editor with timelines, BGM mixing, or subtitle editing.

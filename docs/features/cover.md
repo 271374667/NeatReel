@@ -1,36 +1,36 @@
-# 设置封面
+# Cover Image
 
-**净影连** 支持为最终导出的视频设置封面，让成片在本地浏览、媒体库展示和分享时更容易被识别。
+NeatReel lets you assign a cover image to exported videos so they are easier to recognize in file browsers, media libraries, and sharing workflows.
 
 ![自定义封面海报](/自定义封面海报.png)
 
-### 🖼️ 一键指定视频封面
+### 🖼️ Set a Cover in One Step
 
-在处理视频时，你可以直接进入封面设置区域，为当前输出结果指定一张展示图：
-- **用于最终成片**：封面会作为输出视频的附加封面写入结果文件，而不是烧录进视频画面本身。
-- **提升识别效率**：当你在文件管理器、播放器或媒体库中查看视频时，更容易快速找到目标内容。
-- **适合合集整理**：对于旅游记录、课程归档、演示视频等场景，统一设置封面会更整洁。
+Use the cover section to assign one image to the current export:
+- **Applied to the final file**: the cover is written as an attached cover stream, not burned into the video itself
+- **Better recognition**: easier to find the right file in a player or file manager
+- **Useful for collections**: especially practical for travel clips, tutorials, or project archives
 
 ![设置封面流程](/设置封面流程.webp)
 
-当前界面支持选择的图片格式包括：
+Supported image formats:
 
 `png`、`jpg`、`jpeg`、`bmp`、`gif`、`webp`、`svg`
 
-### 🎯 适合哪些场景
+### 🎯 Good Use Cases
 
-- **分享前整理**：在发送给朋友、同事或客户之前，先给视频加上清晰封面。
-- **批量归档**：长期保存的视频内容可以通过封面快速区分主题。
-- **系列内容管理**：同一批视频可用统一风格的封面保持一致性。
+- **Before sharing**: add a cleaner visual cover before sending files to others
+- **Batch archiving**: use covers to distinguish themes quickly
+- **Series management**: keep a consistent visual style across related exports
 
-### ⚙️ 使用体验
+### ⚙️ Workflow
 
-净影连在功能设计上尽量保持轻量：
-1. 先导入并整理视频顺序。
-2. 根据需要设置旋转、裁剪和输出模式。
-3. 在导出前补充封面信息。
-4. 最终输出带有封面的成片文件；若选择“分别输出”，每个导出文件都会附带同一张封面。
+The workflow stays lightweight:
+1. Import and sort clips
+2. Adjust rotation, crop, and output mode
+3. Add cover information before export
+4. Export files with the attached cover; in separate mode, each exported file gets the same cover
 
-::: tip 💡 提示
-如果你的视频需要对外展示，建议在导出前顺手设置封面，这通常比默认首帧更稳定，也更适合作为展示入口。需要注意的是，不同播放器或文件管理器对附加封面的显示支持程度并不完全相同。
+::: tip 💡 Tip
+If the output is meant to be shown to other people, setting a cover before export is usually more stable and presentable than relying on the first frame. Display support still depends on the target player or file manager.
 :::

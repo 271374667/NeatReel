@@ -1,12 +1,14 @@
+[English](./README.md) | [简体中文](./README_CN.md)
+
 <div align="center">
 
 ![banner](./README.assets/image-20260308193341094.png)
 
-# 净影连 / NeatReel
+# NeatReel
 
-**去黑边，正朝向，一键拼出好影像**
+**Remove borders, fix orientation, and stitch better videos in one click**
 
-点击即用，轻松上手，精准去除各种黑边，还您清爽视频
+Easy to use, quick to start, and built to clean up black bars from mixed video clips before export.
 
 [![GitHub Release](https://img.shields.io/github/v/release/271374667/NeatReel)](https://github.com/271374667/NeatReel/releases)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
@@ -17,87 +19,89 @@
 
 ---
 
-净影连（NeatReel）是一款面向日常使用者的视频整理与拼接工具。它不仅仅是把视频首尾相接，而是将 **预览、纠正方向、去黑边、裁剪、封面设置、多模式输出** 六个高频痛点一键解决，让多段来源不一的视频快速整合成一条规整、统一的成片。
+**NeatReel** is a lightweight desktop tool for organizing and merging videos. It is not trying to replace a full NLE. Instead, it focuses on the painful steps that usually happen before you merge clips: **previewing, fixing orientation, removing black borders, cropping, setting a cover, and exporting in different modes**.
 
-## 40 秒了解 NeatReel
+## Learn NeatReel in 40 Seconds
 
-下面这个视频将会带您快速查看三个有不规则黑边的视频是如何完美去除黑边然后旋转成正确的朝向最后合并的
+The clip below shows how several videos with irregular black borders can be cleaned up, rotated to the correct orientation, and merged into a neat final output.
 
-![预览](./README.assets/PixPin_2026-03-11_12-00-20.webp)
+![Preview](./README.assets/PixPin_2026-03-11_12-00-20.webp)
 
-## 🚀功能介绍
+## 🚀 Features
 
 <div align="center">
 
 ![image-20260310172055334](./README.assets/image-20260310172055334.png)
 
 <div align="center">
-    <p align="center">软件详情请前往文档进行查看</p>
-    <a href="https://271374667.github.io/NeatReel/">点我前往文档</a>
+    <p align="center">For full details, visit the documentation site.</p>
+    <a href="https://271374667.github.io/NeatReel/">Open English Docs</a>
+    <br />
+    <a href="https://271374667.github.io/NeatReel/zh/">打开中文文档</a>
 </div>
 
 </div>
 
-## 如何运行该项目
+## Running the Project
 
-### 普通用户
+### For regular users
 
-直接通过 Release 下载最新的 Windows 版本，解压后运行 `NeatReel.exe` 即可。
+Download the latest Windows release from GitHub Releases, extract it, and run `NeatReel.exe`.
 
-- 当前主要面向 Windows 10 64 位与 Windows 11 64 位。
-- 默认输出目录为程序根目录下的 `output/` 文件夹。
-- GPU 模式仅适用于支持对应编码能力的 NVIDIA 显卡；不满足条件时请使用速度、均衡或质量模式。
+- The current release is primarily intended for Windows 10 64-bit and Windows 11 64-bit.
+- The default output directory is `output/` under the program root.
+- GPU mode only works on supported NVIDIA hardware. If it fails, switch to Speed, Balanced, or Quality mode.
 
-### 源码运行（开发者）
+### Run from source
 
-> 推荐运行环境 Python 3.11+
-> 推荐使用 `uv` 管理依赖
+> Recommended: Python 3.11+
+> Recommended dependency manager: `uv`
 
-1. 安装依赖
+1. Install dependencies
 
 ```cmd
 uv sync
 ```
 
-2. 生成 Qt 资源文件
+2. Compile Qt resources
 
 ```cmd
 uv run python scripts/compile.py
 ```
 
-3. 启动应用
+3. Start the app
 
 ```cmd
 uv run python NeatReel.py
 ```
 
-> 说明
+> Notes
 >
-> - `NeatReel.py` 当前默认 `DEBUG=False`，因此源码运行前建议先执行一次 `scripts/compile.py`。
-> - 如果你希望直接加载本地 `qml/` 文件调试，可以手动把 `NeatReel.py` 中的 `DEBUG` 改为 `True`。
+> - `NeatReel.py` currently defaults to `DEBUG=False`, so you should run `scripts/compile.py` before launching from source.
+> - If you want to debug directly against local `qml/` files, you can manually set `DEBUG=True` in `NeatReel.py`.
 
-### 打包
+### Build
 
 ```cmd
 uv run python scripts/build.py
 ```
 
-打包结果位于 `dist/NeatReel/`。
+Build output will be placed in `dist/NeatReel/`.
 
-## 额外说明
+## Additional Notes
 
-- 该软件目前仅在 Windows 10 64 位与 Windows 11 64 位上进行过验证，其它系统与平台不保证稳定运行
-- 同一时间只允许启动一个实例；重复启动会唤起已打开的窗口
-- 该软件永久免费，如果您在其他地方付费下载到了该软件请马上退款止损
-- 如果您使用出现了问题或者对软件的建议请您在该页面提出 issue
-- 如果您有更多的问题请前往文档查看
+- The software is currently only verified on Windows 10 64-bit and Windows 11 64-bit.
+- Only one application instance is allowed at a time. Launching it again will focus the existing window.
+- The software is free. If you paid for it somewhere else, request a refund.
+- If you encounter issues or have suggestions, please open an issue on GitHub.
+- For more detailed usage instructions, please read the documentation site.
 
 
 
-## 📄 许可证
+## 📄 License
 
-本项目采用 [LGPL v3](./LICENSE) 许可证。
+This project is licensed under [LGPL v3](./LICENSE).
 
 ---
 
-*净影连 / NeatReel —— 去黑边，正朝向，一键拼出好影像。*
+*NeatReel - Remove borders, fix orientation, and stitch better videos in one click.*

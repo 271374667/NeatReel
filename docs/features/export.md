@@ -1,54 +1,54 @@
-# 输出模式与硬件加速
+# Export Modes and Hardware Acceleration
 
-**净影连** 将复杂的编码参数简化为四种处理模式，方便你按时间、体积和设备条件做取舍。
+NeatReel simplifies encoding choices into four practical modes so you can decide based on speed, file size, and hardware.
 
 ![输出质量选择海报](/输出质量选择海报.png)
 
-### 🏃 速度优先 (SPEED)
+### 🏃 Speed (SPEED)
 
-- **场景**：对处理速度要求最高，希望尽快把素材整理出来。
-- **特点**：导出最快，但文件体积通常更大，细节也会比均衡/质量模式更激进一些。
+- **Use when**: speed matters most
+- **Tradeoff**: fastest output, but usually larger files and more aggressive compression choices
 
-### ⚖️ 均衡模式 (BALANCED) —— 推荐
+### ⚖️ Balanced (BALANCED) - Recommended
 
-- **场景**：日常分享、短视频发布、归档。
-- **特点**：在处理速度、压缩体积与画面表现之间做默认平衡，适合大多数使用场景。
+- **Use when**: everyday sharing, publishing, or archiving
+- **Tradeoff**: balanced defaults for speed, size, and visual quality
 
-### 💎 质量优先 (QUALITY)
+### 💎 Quality (QUALITY)
 
-- **场景**：高质量归档、需要继续二次处理的中间素材、对压缩效率更敏感的长视频。
-- **特点**：速度更慢，但更偏向稳妥画质与压缩效率。它仍然属于重新编码，不等于无损输出。
+- **Use when**: longer videos, archival output, or material that may be processed again later
+- **Tradeoff**: slower, but more conservative about quality and compression efficiency
 
-### 🎮 GPU 硬件加速 (GPU)
+### 🎮 GPU Hardware Acceleration (GPU)
 
-如果你拥有一块 **NVIDIA 独立显卡** 并配置了对应的驱动支持，你可以开启 GPU 模式：
+If you have a supported **NVIDIA GPU** and driver stack, you can enable GPU mode:
 
-- **核心逻辑**：当前实现使用 `av1_nvenc` 编码路径。
-- **适用前提**：不仅要有 NVIDIA 显卡，还要具备对应的硬件编码能力与可用驱动。
-- **使用场景**：适合高分辨率素材或批量整理时追求更高吞吐量。
+- **Current path**: `av1_nvenc`
+- **Requirement**: both compatible hardware and working driver support
+- **Best for**: high-resolution or high-volume processing where throughput matters
 
-::: danger 注意
-如果你的设备没有 NVIDIA 显卡、驱动版本过旧，或硬件本身不支持当前编码能力，开启此模式可能直接处理失败。
+::: danger Important
+If your machine does not have a supported NVIDIA GPU or the available driver stack is incomplete, this mode may fail outright.
 :::
 
 ![输出质量选择](/输出质量选择.png)
 
-## 输出路径与文件命名
+## Output Path and Naming
 
-默认情况下，程序会在主程序根目录下创建 `output/` 文件夹，所有导出结果都会写入该目录。你也可以在「输出配置」区域通过「输出文件夹」选择任意目录。
+By default, the app creates an `output/` folder under the program root. You can also choose any other folder manually from **Output Folder**.
 
-- **源码运行**：这里的“主程序根目录”就是仓库根目录
-- **打包运行**：这里的“主程序根目录”就是 `exe` 所在目录
+- **Source run**: the repository root
+- **Packaged run**: the same directory as the `exe`
 
-当选择 **合并成一个视频** 时，处理完毕会生成一个以项目 ID 命名的 `.mp4` 文件，例如 `a1b2c3d4.mp4`。若选择 **分别输出**，程序会在目标目录下先创建一个同名项目 ID 目录，再依次导出 `0001.mp4`、`0002.mp4`……等编号文件。
+If you choose **Merge into One Video**, the output is a single `.mp4` named with the project ID, for example `a1b2c3d4.mp4`. If you choose **Export Separately**, the app creates a project-ID folder and then writes `0001.mp4`, `0002.mp4`, and so on.
 
-若你已经在界面指定了封面，软件会把这张图片作为附加封面流写入输出文件。它不会被烧录进视频画面本身；在“分别输出”模式下，每个输出文件都会附带同一张封面。
+If a cover image is set, the app writes it as an attached cover stream rather than burning it into the video frame. In separate export mode, each output file gets the same cover.
 
-## 处理页与进度反馈
+## Processing Page and Progress Feedback
 
-点击「开始处理」后，`ProcessingService` 会开启后台合并线程，并通过信号把状态推送到 QML：
+After you click **Start Processing**, `ProcessingService` launches a background worker and pushes state updates to QML:
 
-1. `处理信息` 页面会展示总进度、当前文件进度、处理速度、已用时间与预计剩余时间。
-2. 当处理成功后，状态切换为“完成”并自动把进度条填满；发生异常或用户点击“中止”后会切换为错误状态。
-3. GPU 模式会走 `av1_nvenc`，其它模式默认使用 `libx264` 和 `yuv420p`。裁剪、旋转与输出方向则沿用前面预览阶段确认过的结果。
-4. 处理完成后，右侧的「打开输出目录」按钮会通过 Windows 的 `Explorer` 直接打开目标文件夹。
+1. The page shows total progress, current file progress, speed, elapsed time, and estimated remaining time.
+2. On success, the state becomes completed; on failure or user abort, it switches to an error-like state.
+3. GPU mode uses `av1_nvenc`; other modes currently default to `libx264` with `yuv420p`.
+4. When done, **Open Output Folder** opens the destination with Windows Explorer.

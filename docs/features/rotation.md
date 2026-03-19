@@ -1,27 +1,27 @@
-# 旋转校正
+# Rotation Correction
 
-**净影连** 对混合方向素材有很强的兼容性，不管是手机拍倒了，还是横屏素材混进竖屏片段，都可以先校正再合并。
+NeatReel handles mixed-orientation footage well. Whether a phone clip is sideways or landscape footage ends up mixed with portrait material, you can correct it before export.
 
 ![智能旋转海报](/智能旋转海报.png)
 
-### 🔄 单个视频快速旋转
+### 🔄 Quick Rotation per Clip
 
-无论视频是 90°、180° 还是 270° 偏转，都可以在左侧列表中直接进行调整：
-- **顺时针 90°**：适合把逆向横屏素材快速转正。
-- **逆时针 90°**：适合修正另一侧偏转的片段。
+Use the per-video controls to fix rotation directly:
+- **Rotate 90° clockwise**
+- **Rotate 90° counterclockwise**
 
 ![主页_旋转视频](/主页_旋转视频.webp)
 
-### 📱 统一最终成片方向
+### 📱 Normalize Final Orientation
 
-除了单个视频旋转之外，高级设置栏还可以进一步统一输出方向：
-- **强制横屏**：适合整理相机素材、横版记录或长视频成片。
-- **强制竖屏**：适合短视频平台分发，避免混合朝向导致成片观感割裂。
+The global output setting can also unify the final orientation:
+- **Force landscape**
+- **Force portrait**
 
-::: info 自动旋转规则
-当某个视频还没有被你手动改过旋转角度时，软件会根据当前横屏/竖屏输出方向自动推荐 `0°` 或 `90°`。一旦你手动旋转过该视频，后续就完全以你的设置为准。
+::: info Auto-rotation rule
+If a clip has not been rotated manually, the app can recommend `0°` or `90°` based on the selected output orientation. Once you rotate a clip manually, your own setting takes priority.
 :::
 
-::: tip 💡 提示
-先完成旋转校正，再查看“处理后预览”，更容易判断最终画面是否符合预期。
+::: tip 💡 Tip
+It is usually easier to judge the final frame after rotation is corrected and then previewed in processed mode.
 :::

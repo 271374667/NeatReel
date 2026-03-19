@@ -1,36 +1,36 @@
-# 多种格式支持
+# Supported Formats
 
-**净影连** 可以接收多种常见本地视频格式，减少你在合并前反复转码、筛选素材的时间。
+NeatReel accepts many common local video formats so you can spend less time converting files before cleanup and export.
 
 ![多种格式支持海报](/多种格式支持海报.png)
 
-### 📦 支持常见视频输入格式
+### 📦 Common Input Formats
 
-目前可兼容的输入格式包括：
+Currently supported extensions:
 
 `mp4`、`mkv`、`mov`、`avi`、`webm`、`flv`、`wmv`、`m4v`、`mpg`、`mpeg`、`3gp`、`3g2`、`f4v`、`rm`、`rmvb`、`asf`
 
-这些格式覆盖了手机录制、屏幕录制、下载素材、旧设备导出文件以及部分历史存档视频的常见来源。
+These formats cover phone footage, screen recordings, downloaded media, exports from older devices, and many archived clips.
 
-### 🔄 导入时更省事
+### 🔄 Easier Import Workflow
 
-当你的素材来自不同设备和平台时，视频容器格式往往并不统一。净影连的目标是让你直接把素材拖进来，而不是先做一轮格式整理：
-- **减少前置转换**：能直接导入时，就不需要额外先转一遍格式。
-- **适合混合素材**：手机视频、电脑录屏、社交平台下载文件可以一起整理。
-- **更适合批量处理**：面对几十个片段时，兼容性越高，流程越顺。
+When your clips come from different devices, the container formats are often inconsistent. NeatReel tries to let you drag them in directly instead of forcing format cleanup first:
+- **Less pre-conversion**
+- **Better for mixed sources**
+- **More convenient for batch work**
 
-### 🧩 搭配其他功能一起使用
+### 🧩 Works with the Rest of the Workflow
 
-格式兼容只是第一步，导入之后你还可以继续完成整套整理流程：
-1. 自动识别黑边并裁剪画面。
-2. 统一视频方向，修正横竖屏问题。
-3. 通过预览确认处理后的结果。
-4. 选择速度、均衡或质量模式导出。
+Format support is only the first step. After import, you can still:
+1. Detect and crop borders
+2. Normalize orientation
+3. Preview the processed result
+4. Export with the mode that fits your use case
 
-### ✅ 为什么这很重要
+### ✅ Why this matters
 
-很多视频工具在导入阶段就会因为格式差异增加额外门槛。净影连更关注“整理”这件事本身，让你把精力放在筛选内容和输出结果上，而不是花时间处理格式兼容问题。
+Many video tools add friction at the import stage. NeatReel tries to keep the focus on organizing and exporting rather than on format prep.
 
-::: info 💡 说明
-如果某些极少见的编码组合无法直接处理，通常并不是扩展名本身的问题，而是封装格式与内部编码参数超出了当前环境支持范围。
+::: info 💡 Note
+If a rare file still fails, the limitation is usually not the extension itself but whether your local environment supports the actual internal codec combination.
 :::

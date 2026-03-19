@@ -2,32 +2,32 @@
 
 ---
 
-# 项目简介
+# Introduction
 
-**净影连 (NeatReel)** 是一款专为视频“整理控”量身打造的开源桌面工具。它并不追求复杂的剪辑功能，而是专注于解决视频合并前最琐碎、最头疼的几个环节：**去除黑边**、**校正方向**、**正式导出前预览结果**。
+**NeatReel** is an open-source desktop tool for people who mainly need to clean up and combine videos. It does not try to be a full editor. Instead, it focuses on the annoying steps that happen before merging: **removing black borders**, **fixing orientation**, and **previewing the output before export**.
 
-有时我们会下载到一些影视剪辑片段，或是自己录制的视频分成了多段。当我们想要将它们合并时，往往会遇到横竖屏混杂、黑边不一致、封面不统一的问题，导致整理过程十分麻烦。使用 NeatReel 能够帮您快速整理并一键合并。它提供速度、均衡、质量、GPU 四种处理模式，但这些模式都属于重新编码流程，不等于无损导出。
+When video clips come from different devices or recording methods, they often have mixed orientation, inconsistent borders, and mismatched presentation. NeatReel helps normalize them quickly and then export them in a cleaner form. It offers Speed, Balanced, Quality, and GPU modes, but all of them are re-encoding paths rather than lossless passthrough.
 
 ![主页预览](/主页_鼠标拖拽排序.png)
 
-::: tip 适用范围
-当前版本主要面向 Windows 10 64 位与 Windows 11 64 位。它是一款“整理与拼接工具”，并不提供时间线剪辑、BGM 混音、字幕编辑等完整非编能力。
+::: tip Scope
+The current release mainly targets Windows 10 64-bit and Windows 11 64-bit. It is a cleanup-and-merge tool, not a full nonlinear editor with timeline editing, BGM mixing, or subtitle authoring.
 :::
 
-### 💡 为什么需要它？
+### 💡 Why use it?
 
-在录屏、手机拍摄或整理素材时，我们常会遇到以下繁琐步骤：
+These are the common pain points it tries to reduce:
 
-1. **黑边问题**：录屏视频带着边缘黑框，直接拼接后极不美观。
-2. **方向混乱**：手机竖拍和相机横拍的素材混在一起，合并后有的画面倒置，有的画面侧立。
-3. **重复试错**：导出后才发现方向不对、黑边没去干净，返工成本很高。
-4. **重量级工具开销**：仅仅想简单拼一下，却不得不打开庞大、沉重的专业剪辑软件。
+1. **Black borders**: recorded or archived footage often includes visible bars that look bad after merging.
+2. **Mixed orientation**: portrait phone clips and landscape camera clips do not line up cleanly by default.
+3. **Too much trial and error**: finding a mistake after export wastes time.
+4. **Overkill tools**: many users just want to clean and combine clips without opening a heavyweight editor.
 
-**净影连** 旨在解决这些痛点。它把“预览、去边、校正方向、设置封面、批量合成”几个高频动作集中到一个桌面界面中，让你尽量在导出前就把问题处理完。
+NeatReel brings the high-frequency steps into one desktop interface so you can fix issues before export instead of after.
 
-### ✨ 核心设计理念
+### ✨ Core Design Ideas
 
-- **去黑边**：自动识别并裁掉影响观感的黑边，也允许手动修正。
-- **正朝向**：先自动推荐，再允许你手动校正每个片段的方向。
-- **先看结果再导出**：在处理前预览裁剪与旋转效果，减少重复等待。
-- **一键拼**：既可以合并成一个视频，也可以分别输出整理后的片段。
+- **Border removal**: detect and crop distracting black bars automatically, with manual correction when needed.
+- **Orientation correction**: recommend a direction automatically, then let you override clip rotation manually.
+- **Preview before export**: confirm cropping and rotation before waiting for the final render.
+- **One-click output**: merge into one video or export cleaned-up clips separately.
