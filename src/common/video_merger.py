@@ -340,22 +340,13 @@ class VideoMerger:
                 # 多线程解码不影响画质，始终启用
                 in_video.thread_type = "AUTO"
 
-                estimated_total_frames = int(video_info.total_frames or 0)
-                if estimated_total_frames <= 0:
-                    estimated_total_frames = int(in_video.frames or 0)
-                if (
-                    estimated_total_frames <= 0
-                    and in_video.duration is not None
-                    and in_video.time_base is not None
-                ):
-                    duration_seconds = float(in_video.duration * in_video.time_base)
-                    stream_fps = float(
-                        in_video.average_rate or in_video.rate or effective_fps
-                    )
-                    if duration_seconds > 0 and stream_fps > 0:
-                        estimated_total_frames = int(
-                            max(1, round(duration_seconds * stream_fps))
-                        )
+                estimated_total_frames = self._estimate_output_total_frames(
+                    input_container=input_container,
+                    in_video=in_video,
+                    source_total_frames=int(video_info.total_frames or 0),
+                    target_fps=float(effective_fps),
+                    source_fps_hint=float(video_info.fps or 0),
+                )
 
                 signals.fileStarted.emit(
                     file_index + 1,
@@ -761,18 +752,13 @@ class VideoMerger:
 
             in_video.thread_type = "AUTO"
 
-            estimated_total_frames = int(profile["video_info"].total_frames or 0)
-            if estimated_total_frames <= 0:
-                estimated_total_frames = int(in_video.frames or 0)
-            if (
-                estimated_total_frames <= 0
-                and in_video.duration is not None
-                and in_video.time_base is not None
-            ):
-                duration_seconds = float(in_video.duration * in_video.time_base)
-                stream_fps = float(in_video.average_rate or in_video.rate or effective_fps)
-                if duration_seconds > 0 and stream_fps > 0:
-                    estimated_total_frames = int(max(1, round(duration_seconds * stream_fps)))
+            estimated_total_frames = self._estimate_output_total_frames(
+                input_container=input_container,
+                in_video=in_video,
+                source_total_frames=int(profile["video_info"].total_frames or 0),
+                target_fps=float(effective_fps),
+                source_fps_hint=float(profile["video_info"].fps or 0),
+            )
 
             signals.fileStarted.emit(
                 file_index,
@@ -930,6 +916,51 @@ class VideoMerger:
             )
             return crop_result
         return None
+
+    @staticmethod
+    def _estimate_output_total_frames(
+        input_container: av.container.InputContainer,
+        in_video: av.video.stream.VideoStream,
+        source_total_frames: int,
+        target_fps: float,
+        source_fps_hint: float = 0.0,
+    ) -> int:
+        source_total_frames = max(0, int(source_total_frames))
+        source_fps = float(
+            source_fps_hint or in_video.average_rate or in_video.base_rate or in_video.rate or 0
+        )
+
+        if (
+            source_total_frames > 0
+            and source_fps > 0
+            and target_fps > 0
+            and math.isclose(source_fps, target_fps, rel_tol=0.0, abs_tol=1e-3)
+        ):
+            return source_total_frames
+
+        duration_seconds = 0.0
+        if input_container.duration is not None:
+            duration_seconds = float(input_container.duration / av.time_base)
+        elif in_video.duration is not None and in_video.time_base is not None:
+            duration_seconds = float(in_video.duration * in_video.time_base)
+        elif source_total_frames > 0 and source_fps > 0:
+            duration_seconds = source_total_frames / source_fps
+
+        if duration_seconds > 0 and target_fps > 0:
+            estimated = int(math.ceil(max(0.0, duration_seconds * target_fps - 1e-6)))
+            return max(1, estimated)
+
+        if source_total_frames > 0 and source_fps > 0 and target_fps > 0:
+            estimated = int(
+                math.ceil(max(0.0, source_total_frames * target_fps / source_fps - 1e-6))
+            )
+            return max(1, estimated)
+
+        if source_total_frames > 0:
+            return source_total_frames
+
+        fallback_frames = int(in_video.frames or 0)
+        return max(0, fallback_frames)
 
     @staticmethod
     def _needs_rotation(width: int, height: int, orientation: Orientation) -> bool:

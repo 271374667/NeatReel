@@ -383,7 +383,10 @@ class ProcessingService(QObject):
         # Stage progress
         stage_progress = 0.0
         if self._current_total_frames > 0:
-            stage_progress = min(1.0, current_frames / self._current_total_frames)
+            raw_stage_progress = min(1.0, current_frames / self._current_total_frames)
+            # 只有文件真正结束时（_on_file_finished）才显示 100%，
+            # 避免视频帧已经处理完但音频/flush 仍在继续时界面提前到 100%。
+            stage_progress = min(raw_stage_progress, 0.994)
         self.stageProgressChanged.emit(stage_progress)
 
         # Total progress
