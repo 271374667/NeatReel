@@ -160,6 +160,40 @@ class VideoMerger:
         },
     }
 
+    @staticmethod
+    def _normalize_fps_fraction(fps: float) -> Fraction:
+        normalized = Fraction(str(float(fps))).limit_denominator(1001)
+        if normalized <= 0:
+            raise ValueError(f"非法帧率: {fps}")
+        return normalized
+
+    @classmethod
+    def _select_target_fps_fraction(
+        cls,
+        source_fps_values: Sequence[float],
+        target_fps: int,
+    ) -> Fraction:
+        if target_fps != -1:
+            return Fraction(target_fps, 1)
+        if not source_fps_values:
+            return Fraction(30, 1)
+
+        normalized_source_fps = [
+            cls._normalize_fps_fraction(fps)
+            for fps in source_fps_values
+            if float(fps) > 0
+        ]
+        if not normalized_source_fps:
+            return Fraction(30, 1)
+
+        ordered_fps = Counter(normalized_source_fps).most_common()
+        top_fps, top_count = ordered_fps[0]
+        has_unique_mode = len(ordered_fps) == 1 or top_count > ordered_fps[1][1]
+        if has_unique_mode:
+            return top_fps
+
+        return max(normalized_source_fps, key=float)
+
     def merge(
         self,
         input_files: Sequence[InputVideoInfo],
@@ -212,21 +246,20 @@ class VideoMerger:
         ]
 
         # ===== 确定目标帧率和音频采样率 =====
-        if target_fps != -1:
-            effective_fps = target_fps
-        else:
-            effective_fps = (
-                max(int(math.ceil(f)) for f in source_fps_values)
-                if source_fps_values
-                else 30
-            )
+        target_fps_fraction = self._select_target_fps_fraction(
+            source_fps_values,
+            target_fps,
+        )
+        effective_fps = float(target_fps_fraction)
         target_audio_rate = max(source_audio_rates) if source_audio_rates else 44100
-        target_fps_fraction = Fraction(effective_fps, 1)
         # 使用编码器原生 time_base=1/fps，PTS 直接用帧序号（0,1,2,...）
         # 避免自定义 time_base 的截断误差导致 DTS 碰撞
-        video_time_base = Fraction(1, effective_fps)
+        video_time_base = Fraction(
+            target_fps_fraction.denominator,
+            target_fps_fraction.numerator,
+        )
 
-        logger.info(f"目标帧率: {effective_fps} fps")
+        logger.info(f"目标帧率: {effective_fps:.3f} fps ({target_fps_fraction})")
         logger.info(f"目标音频采样率: {target_audio_rate} Hz")
 
         # ===== 确定目标分辨率 =====
@@ -361,7 +394,7 @@ class VideoMerger:
                     crop_result,
                     target_width,
                     target_height,
-                    effective_fps,
+                    target_fps_fraction,
                     mode_cfg["scale_flags"],
                     video_pixel_format,
                 )
@@ -486,7 +519,14 @@ class VideoMerger:
                 # 使用 max 防止回退：重采样可能产生比视频时长更多的音频样本，
                 # 导致编码器内部缓冲的 PTS 高于按视频计算的值
                 audio_pts_offset = max(
-                    int(video_pts_offset / effective_fps * target_audio_rate),
+                    int(
+                        Fraction(
+                            video_pts_offset
+                            * target_audio_rate
+                            * target_fps_fraction.denominator,
+                            target_fps_fraction.numerator,
+                        )
+                    ),
                     audio_pts_offset + segment_audio_sample_count,
                 )
 
@@ -1038,7 +1078,7 @@ class VideoMerger:
         crop_result: CropResult | None,
         target_width: int,
         target_height: int,
-        target_fps: int | None = None,
+        target_fps: Fraction | float | None = None,
         scale_flags: str = "bicubic",
         pixel_format: str = "yuv420p",
     ) -> dict[str, object]:

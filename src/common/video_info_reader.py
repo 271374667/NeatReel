@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
 from loguru import logger
+from src.common.app_settings import get_video_info_detect_short_edge
 
 if TYPE_CHECKING:
     from PIL import Image as PILImage
@@ -268,7 +269,7 @@ class VideoInfoReader:
 
     def __init__(
         self,
-        detect_short_edge: int = 480,
+        detect_short_edge: int | None = None,
         min_border_ratio: float = 0.02,
         safety_margin: int = 2,
         # 帧差分二值化阈值
@@ -287,7 +288,12 @@ class VideoInfoReader:
         # 黑边区域的最大亮度：像素亮于此值则认为是内容
         spatial_border_max_brightness: float = 30.0,
     ):
-        self.detect_short_edge = detect_short_edge
+        resolved_detect_short_edge = (
+            get_video_info_detect_short_edge()
+            if detect_short_edge is None
+            else int(detect_short_edge)
+        )
+        self.detect_short_edge = max(120, resolved_detect_short_edge)
         self.min_border_ratio = min_border_ratio
         self.safety_margin = safety_margin
         self.diff_threshold = diff_threshold
@@ -346,6 +352,7 @@ class VideoInfoReader:
                 raise ValueError(f"no video stream found: {video_path}")
 
             stream = container.streams.video[0]
+            stream.thread_type = "AUTO"
             audio_stream = (
                 container.streams.audio[0] if container.streams.audio else None
             )
