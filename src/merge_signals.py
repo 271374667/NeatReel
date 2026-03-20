@@ -63,6 +63,21 @@ class MergeSignals(QObject):
     #   2. 主进度条：totalProgressChanged -> qml/Windows/Processing.qml 的 totalProgress。
     frameProcessed = Signal(int, int)
 
+    # 由 _MergeWorker 在真正开始合并前的“读取视频信息/预处理”阶段持续发出。
+    # 连接到 ProcessingService._on_preprocess_progress()。
+    # 参数:
+    #   current: int
+    #       当前已经完成预处理的视频数量。
+    #   total: int
+    #       需要预处理的视频总数量。
+    # 用途:
+    #   在正式进入 mergeStarted 之前，为界面中央的模态弹窗提供进度数据，
+    #   避免用户在等待视频信息收集阶段时看到空白的 0% 进度界面。
+    # 进度条关系:
+    #   不驱动主进度条或子进度条；
+    #   专门驱动 Processing.qml 中预处理 Popup 里的进度条和计数文本。
+    preprocessProgress = Signal(int, int)
+
     # 由 VideoMerger 在某个文件处理完成时发出。
     # 连接到 ProcessingService._on_file_finished()。
     # 参数:
