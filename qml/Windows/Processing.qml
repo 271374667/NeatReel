@@ -265,6 +265,7 @@ Item {
                 }
 
                 Rectangle {
+                    id: totalProgressBarTrack
                     Layout.fillWidth: true
                     height: 8
                     radius: 4
@@ -272,58 +273,89 @@ Item {
                     clip: true
 
                     Rectangle {
-                        id: totalFill
+                        id: totalProgressBarFill
                         width: parent.width * root.displayTotalProgress
                         height: parent.height
                         radius: parent.radius
                         color: root.barColor
                         Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
                         Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                    }
 
-                        Item {
-                            id: glowHead
-                            width: 24
-                            height: 24
+                    Item {
+                        id: totalProgressBarHead
+                        width: 30
+                        height: 18
+                        x: Math.max(
+                               0,
+                               Math.min(
+                                   totalProgressBarTrack.width - width,
+                                   totalProgressBarFill.width - width * 0.55
+                               )
+                           )
+                        y: (parent.height - height) / 2
+                        visible: root.processingStatus === 0
+                                 && root.displayTotalProgress >= 0.03
+                                 && root.displayTotalProgress < 0.995
+                        opacity: 0.96
+
+                        Rectangle {
+                            id: totalProgressBarHeadGlowSource
+                            anchors.centerIn: parent
+                            width: 18
+                            height: 10
+                            radius: 5
+                            color: Qt.lighter(root.barColor, 1.12)
+                            opacity: 0.62
+                        }
+
+                        MultiEffect {
+                            anchors.fill: totalProgressBarHeadGlowSource
+                            anchors.margins: -6
+                            source: totalProgressBarHeadGlowSource
+                            blurEnabled: true
+                            blur: 0.9
+                            blurMax: 24
+                            brightness: 0.12
+                        }
+
+                        Rectangle {
+                            id: totalProgressBarHeadSoftCap
                             anchors.right: parent.right
-                            anchors.rightMargin: -8
+                            anchors.rightMargin: 4
                             anchors.verticalCenter: parent.verticalCenter
-                            visible: root.processingStatus === 0 && root.displayTotalProgress > 0.0 && root.displayTotalProgress < 1.0
+                            width: 14
+                            height: 8
+                            radius: 4
+                            color: Qt.rgba(1, 1, 1, 0.22)
+                        }
 
-                            Rectangle {
-                                id: glowBlob
-                                anchors.centerIn: parent
-                                width: 14
-                                height: 14
-                                radius: 7
-                                color: root.barColor
-                                opacity: 0.78
-                            }
+                        Rectangle {
+                            id: totalProgressBarHeadCore
+                            anchors.right: parent.right
+                            anchors.rightMargin: 2
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: Qt.rgba(1, 1, 1, 0.52)
+                        }
 
-                            MultiEffect {
-                                anchors.fill: glowBlob
-                                anchors.margins: -8
-                                source: glowBlob
-                                blurEnabled: true
-                                blur: 1.0
-                                blurMax: 32
-                                brightness: 0.35
-                            }
+                        Rectangle {
+                            id: totalProgressBarHeadEdge
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 2
+                            height: parent.height - 4
+                            radius: width / 2
+                            color: Qt.rgba(1, 1, 1, 0.82)
+                        }
 
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 6
-                                height: 6
-                                radius: 3
-                                color: "white"
-                                opacity: 0.88
-                            }
-
-                            SequentialAnimation on opacity {
-                                running: glowHead.visible
-                                loops: Animation.Infinite
-                                NumberAnimation { to: 0.56; duration: 520; easing.type: Easing.InOutQuad }
-                                NumberAnimation { to: 1.0; duration: 520; easing.type: Easing.InOutQuad }
-                            }
+                        SequentialAnimation on opacity {
+                            running: totalProgressBarHead.visible
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.72; duration: 900; easing.type: Easing.InOutQuad }
+                            NumberAnimation { to: 0.98; duration: 900; easing.type: Easing.InOutQuad }
                         }
                     }
                 }
@@ -361,6 +393,7 @@ Item {
                 }
 
                 Rectangle {
+                    id: stageProgressBarTrack
                     Layout.fillWidth: true
                     height: 4
                     radius: 2
@@ -368,6 +401,7 @@ Item {
                     clip: true
 
                     Rectangle {
+                        id: stageProgressBarFill
                         width: parent.width * root.displayStageProgress
                         height: parent.height
                         radius: parent.radius
