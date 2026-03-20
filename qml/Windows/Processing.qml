@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls.FluentWinUI3
 import QtQuick.Layouts
 import QtQuick.Effects
+import QtQuick.Window
 import "../Components"
 import "../Widgets"
 import "../"
@@ -21,6 +22,9 @@ Item {
     property int processingStatus: 0 // 0: 进行中, 1: 完成, 2: 错误
     property int displayState: 0
     property url frameSource: ""
+    property bool preprocessVisible: true
+    property int preprocessCurrent: 0
+    property int preprocessTotal: 0
 
     signal cancelRequested()
     signal continueRequested()
@@ -38,6 +42,9 @@ Item {
         function onTotalProgressChanged(v) { root.totalProgress = v }
         function onTotalCurrentChanged(v) { root.totalCurrent = v }
         function onTotalCountChanged(v) { root.totalCount = v }
+        function onPreprocessVisibleChanged() { root.refreshPreprocessStateFromService() }
+        function onPreprocessCurrentChanged() { root.refreshPreprocessStateFromService() }
+        function onPreprocessTotalChanged() { root.refreshPreprocessStateFromService() }
         function onStageProgressChanged(v) { root.stageProgress = v }
         function onStageNameChanged(v) { root.stageName = v }
         function onElapsedTimeChanged(v) { root.elapsedTime = v }
@@ -51,6 +58,8 @@ Item {
 
     readonly property real tp: Math.max(0.0, Math.min(1.0, totalProgress))
     readonly property real sp: Math.max(0.0, Math.min(1.0, stageProgress))
+    readonly property int safePreprocessCurrent: Math.max(0, Math.min(preprocessCurrent, preprocessTotal))
+    readonly property real preprocessRatio: preprocessTotal > 0 ? safePreprocessCurrent / preprocessTotal : 0.0
     readonly property real displayTotalProgress: processingStatus === 1 ? 1.0 : tp
     readonly property real displayStageProgress: processingStatus === 1 ? 1.0 : sp
     readonly property int displayCurrentCount: processingStatus === 1 && totalCount > 0 ? totalCount : totalCurrent
@@ -58,6 +67,32 @@ Item {
     readonly property color barColor: processingStatus === 1 ? "#107C10" : processingStatus === 2 ? "#C42B1C" : "#0078D4"
     readonly property string pctText: Math.round(displayTotalProgress * 100) + "%"
     readonly property string statusText: processingStatus === 1 ? qsTr("完成") : processingStatus === 2 ? qsTr("错误") : qsTr("进行中")
+    readonly property string preprocessCountText: preprocessTotal > 0 ? (safePreprocessCurrent + "/" + preprocessTotal) : "0/0"
+    readonly property bool hasPendingPreprocess: root.processingStatus === 0
+                                                && root.preprocessTotal > 0
+                                                && root.preprocessCurrent < root.preprocessTotal
+    readonly property bool showPreprocessOverlay: root.visible && (root.preprocessVisible || root.hasPendingPreprocess)
+
+    function refreshPreprocessStateFromService() {
+        if (!processingService)
+            return
+        const serviceIdle = !processingService.preprocessVisible
+                            && processingService.preprocessCurrent === 0
+                            && processingService.preprocessTotal === 0
+        if (serviceIdle) {
+            return
+        }
+        root.preprocessVisible = processingService.preprocessVisible
+        root.preprocessCurrent = processingService.preprocessCurrent
+        root.preprocessTotal = processingService.preprocessTotal
+    }
+
+    onVisibleChanged: {
+        if (root.visible)
+            refreshPreprocessStateFromService()
+    }
+
+    Component.onCompleted: refreshPreprocessStateFromService()
 
     component StatCard: Rectangle {
         id: statCard
@@ -526,5 +561,136 @@ Item {
             }
         }
     }
-}
 
+    Item {
+        id: preprocessPopup
+        parent: root.Window.window ? root.Window.window.contentItem : root
+        anchors.fill: parent
+        z: 10000
+        visible: opacity > 0.01 || root.showPreprocessOverlay
+        opacity: root.showPreprocessOverlay ? 1.0 : 0.0
+        enabled: visible
+
+        Behavior on opacity {
+            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Qt.rgba(10 / 255, 14 / 255, 20 / 255, 0.18)
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            preventStealing: true
+            onClicked: function(mouse) { mouse.accepted = true }
+            onPressed: function(mouse) { mouse.accepted = true }
+            onReleased: function(mouse) { mouse.accepted = true }
+            onWheel: function(wheel) { wheel.accepted = true }
+        }
+
+        Rectangle {
+            id: preprocessPopupCard
+            width: Math.min(380, Math.max(280, preprocessPopup.width - 40))
+            implicitHeight: 126
+            anchors.centerIn: parent
+            radius: 14
+            color: "#fcfdff"
+            border.width: 1
+            border.color: "#dbe3eb"
+            scale: root.showPreprocessOverlay ? 1.0 : 0.96
+            opacity: preprocessPopup.opacity
+
+            Behavior on scale {
+                NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -1
+                radius: parent.radius + 1
+                color: "transparent"
+                border.width: 1
+                border.color: Qt.rgba(0, 0, 0, 0.03)
+            }
+
+            Rectangle {
+                width: parent.width - 28
+                height: 1
+                anchors.top: parent.top
+                anchors.horizontalCenter: parent.horizontalCenter
+                color: Qt.rgba(1, 1, 1, 0.72)
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -3
+                radius: parent.radius + 3
+                color: "transparent"
+                border.width: 1
+                border.color: Qt.rgba(0, 0, 0, 0.025)
+                z: -1
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -7
+                radius: parent.radius + 7
+                color: "transparent"
+                border.width: 1
+                border.color: Qt.rgba(0, 0, 0, 0.012)
+                z: -2
+            }
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 18
+                anchors.topMargin: 16
+                anchors.bottomMargin: 16
+                spacing: 10
+
+                Rectangle {
+                    id: preprocessProgressBarTrack
+                    Layout.fillWidth: true
+                    height: 8
+                    radius: 4
+                    color: "#e4ebf3"
+                    clip: true
+
+                    Rectangle {
+                        id: preprocessProgressBarFill
+                        width: parent.width * root.preprocessRatio
+                        height: parent.height
+                        radius: parent.radius
+                        color: "#0078D4"
+                        Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("正在获取视频信息")
+                    font.pixelSize: 18
+                    font.family: appFontFamily
+                    font.weight: Font.DemiBold
+                    color: "#1f252b"
+                    horizontalAlignment: Text.AlignHCenter
+                    renderType: Text.NativeRendering
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: root.preprocessCountText
+                    font.pixelSize: 14
+                    font.family: appFontFamily
+                    font.weight: Font.DemiBold
+                    color: "#5f6974"
+                    horizontalAlignment: Text.AlignHCenter
+                    renderType: Text.NativeRendering
+                }
+            }
+        }
+    }
+}

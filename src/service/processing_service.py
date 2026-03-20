@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import subprocess
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from time import monotonic
 
 from loguru import logger
-from PySide6.QtCore import QCoreApplication, QObject, QThread, QTimer, QUuid, QUrl, Signal, Slot
+from PySide6.QtCore import QCoreApplication, QObject, Property, QThread, QTimer, QUuid, QUrl, Signal, Slot
 from PySide6.QtGui import QImage
 
 from src.common.video_info_reader import CropResult, VideoInfoReader
@@ -157,11 +157,25 @@ class _MergeWorker(QThread):
                     )
                 return item, info, effective_crop
 
+            results: list[tuple[dict, object, CropResult | None] | None] = [None] * len(self._video_items)
+            total_items = len(self._video_items)
             with ThreadPoolExecutor() as pool:
-                results = list(pool.map(_read_single, self._video_items))
+                future_to_index = {
+                    pool.submit(_read_single, item): index
+                    for index, item in enumerate(self._video_items)
+                }
+                completed = 0
+                for future in as_completed(future_to_index):
+                    index = future_to_index[future]
+                    results[index] = future.result()
+                    completed += 1
+                    signals.preprocessProgress.emit(completed, total_items)
 
             input_files: list[InputVideoInfo] = []
-            for item, info, effective_crop in results:
+            for result in results:
+                if result is None:
+                    continue
+                item, info, effective_crop = result
                 manually_edited = bool(item.get("manualRotationEdited", False))
                 angle = _normalize_rotation_for_merge(
                     int(item.get("rotation", 0)),
@@ -212,6 +226,9 @@ class _MergeWorker(QThread):
 # ── ProcessingService (exposed to QML as context property) ───────
 class ProcessingService(QObject):
     # signals -> QML
+    preprocessVisibleChanged = Signal(bool)
+    preprocessCurrentChanged = Signal(int)
+    preprocessTotalChanged = Signal(int)
     totalProgressChanged = Signal(float)
     totalCurrentChanged = Signal(int)
     totalCountChanged = Signal(int)
@@ -224,6 +241,18 @@ class ProcessingService(QObject):
     displayStateChanged = Signal(int)
     frameSourceChanged = Signal(str)
     projectIdChanged = Signal(str)
+
+    @Property(bool, notify=preprocessVisibleChanged)
+    def preprocessVisible(self) -> bool:
+        return self._preprocess_visible
+
+    @Property(int, notify=preprocessCurrentChanged)
+    def preprocessCurrent(self) -> int:
+        return self._preprocess_current
+
+    @Property(int, notify=preprocessTotalChanged)
+    def preprocessTotal(self) -> int:
+        return self._preprocess_total
 
     def __init__(self, image_provider: ThumbnailImageProvider, parent: QObject | None = None):
         super().__init__(parent)
@@ -247,6 +276,9 @@ class ProcessingService(QObject):
         self._current_frames = 0
         self._current_total_frames = 0
         self._frame_counter = 0
+        self._preprocess_visible = False
+        self._preprocess_current = 0
+        self._preprocess_total = 0
 
         # Speed tracking (sliding window)
         self._speed_samples: deque[tuple[float, int]] = deque(maxlen=30)
@@ -258,6 +290,7 @@ class ProcessingService(QObject):
         signals.mergeStarted.connect(self._on_merge_started)
         signals.fileStarted.connect(self._on_file_started)
         signals.frameProcessed.connect(self._on_frame_processed)
+        signals.preprocessProgress.connect(self._on_preprocess_progress)
         signals.fileFinished.connect(self._on_file_finished)
         signals.mergeFinished.connect(self._on_merge_finished)
         signals.mergeError.connect(self._on_merge_error)
@@ -300,9 +333,14 @@ class ProcessingService(QObject):
         self._effective_fps = 30.0
         self._speed_samples.clear()
         self._start_time = monotonic()
+        self._set_preprocess_total(len(video_items))
+        self._set_preprocess_current(0)
+        self._set_preprocess_visible(bool(video_items))
 
         self.processingStatusChanged.emit(0)
         self.totalProgressChanged.emit(0.0)
+        self.totalCountChanged.emit(0)
+        self.totalCurrentChanged.emit(0)
         self.stageProgressChanged.emit(0.0)
         self.stageNameChanged.emit(_tr("准备中"))
         self.elapsedTimeChanged.emit("00:00:00")
@@ -337,6 +375,9 @@ class ProcessingService(QObject):
     def reset(self) -> None:
         self._elapsed_timer.stop()
         self._speed_samples.clear()
+        self._set_preprocess_visible(False)
+        self._set_preprocess_current(0)
+        self._set_preprocess_total(0)
 
     # ── MergeSignals handlers ────────────────────────────────────
 
@@ -347,6 +388,7 @@ class ProcessingService(QObject):
         self._cumulative_frames = 0
         self._speed_samples.clear()
         self._start_time = monotonic()
+        self._set_preprocess_visible(False)
 
         self.totalCountChanged.emit(total_files)
         self.totalCurrentChanged.emit(0)
@@ -404,6 +446,12 @@ class ProcessingService(QObject):
         if remaining:
             self.estimatedRemainingChanged.emit(remaining)
 
+    def _on_preprocess_progress(self, current: int, total: int) -> None:
+        self._set_preprocess_total(total)
+        self._set_preprocess_current(current)
+        if total > 0:
+            self._set_preprocess_visible(True)
+
     def _on_file_finished(self, file_index: int) -> None:
         self._completed_files = file_index
         self.stageProgressChanged.emit(1.0)
@@ -422,6 +470,7 @@ class ProcessingService(QObject):
 
     def _on_merge_error(self, message: str) -> None:
         self._elapsed_timer.stop()
+        self._set_preprocess_visible(False)
         self.processingStatusChanged.emit(2)  # Error
         if message == _MERGE_CANCELLED_MESSAGE:
             self.stageNameChanged.emit(_tr("已取消"))
@@ -436,6 +485,24 @@ class ProcessingService(QObject):
         self.frameSourceChanged.emit(f"image://thumbnail/{image_id}")
 
     # ── internal ─────────────────────────────────────────────────
+
+    def _set_preprocess_visible(self, visible: bool) -> None:
+        visible = bool(visible)
+        if self._preprocess_visible != visible:
+            self._preprocess_visible = visible
+            self.preprocessVisibleChanged.emit(visible)
+
+    def _set_preprocess_current(self, current: int) -> None:
+        current = max(0, int(current))
+        if self._preprocess_current != current:
+            self._preprocess_current = current
+            self.preprocessCurrentChanged.emit(current)
+
+    def _set_preprocess_total(self, total: int) -> None:
+        total = max(0, int(total))
+        if self._preprocess_total != total:
+            self._preprocess_total = total
+            self.preprocessTotalChanged.emit(total)
 
     def _update_elapsed(self) -> None:
         elapsed = monotonic() - self._start_time

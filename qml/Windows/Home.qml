@@ -769,8 +769,10 @@ Item {
             var isLandscape = landscapeRadio.checked
             var outputMode = mergeOutputRadio.checked ? 0 : 1
             var coverPath = coverSelecter.hasCover ? coverSelecter.coverSource.toString() : ""
-            processingService.startMerge(processMode, isLandscape, outputMode, coverPath, root.outputDirectory, items)
             root.startProcessing()
+            Qt.callLater(function() {
+                processingService.startMerge(processMode, isLandscape, outputMode, coverPath, root.outputDirectory, items)
+            })
         }
         anchors.right: parent.right
         anchors.bottom: parent.bottom
