@@ -566,7 +566,7 @@ Item {
                                                     tooltip: qsTr("需要有N卡硬件支持，否则会报错")
                                                 }
                                             ]
-                                            currentIndex: 1
+                                            currentIndex: 2
                                             delegate: ItemDelegate {
                                                 required property int index
                                                 required property var modelData

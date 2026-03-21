@@ -10,43 +10,6 @@ from src.common.video_info_reader import VideoInfoReader, CropResult
 from src.core.paths import OUTPUT_DIR
 from src.image_provider import ThumbnailImageProvider, pil_to_qimage
 
-
-# ── helpers ──────────────────────────────────────────────────────
-def _format_duration(seconds: float) -> str:
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
-    return f"{h:02d}:{m:02d}:{s:02d}"
-
-
-def _normalize_rotation_angle(angle: int) -> int:
-    return int(angle) % 360
-
-
-def _rotation_swaps_dimensions(angle: int) -> bool:
-    return _normalize_rotation_angle(angle) in (90, 270)
-
-
-def _resolve_effective_rotation(
-    base_rotation: int,
-    width: int,
-    height: int,
-    orientation: int,
-) -> int:
-    normalized_base = _normalize_rotation_angle(base_rotation)
-    effective_width = int(width)
-    effective_height = int(height)
-    if _rotation_swaps_dimensions(normalized_base):
-        effective_width, effective_height = effective_height, effective_width
-
-    if orientation == 0:
-        orientation_matches = effective_width >= effective_height
-    else:
-        orientation_matches = effective_height > effective_width
-
-    return normalized_base if orientation_matches else (normalized_base + 90) % 360
-
-
 # ── thumbnail worker ─────────────────────────────────────────────
 class _ThumbnailWorker(QThread):
     """Background thread: read_info + generate_thumb_image."""
@@ -75,6 +38,41 @@ class _ThumbnailWorker(QThread):
         self._preview_mode = preview_mode
         self._auto_detect_rotation = auto_detect_rotation
 
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        s = int(seconds % 60)
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
+    @staticmethod
+    def _normalize_rotation_angle(angle: int) -> int:
+        return int(angle) % 360
+
+    @staticmethod
+    def _rotation_swaps_dimensions(angle: int) -> bool:
+        return _ThumbnailWorker._normalize_rotation_angle(angle) in (90, 270)
+
+    @staticmethod
+    def _resolve_effective_rotation(
+        base_rotation: int,
+        width: int,
+        height: int,
+        orientation: int,
+    ) -> int:
+        normalized_base = _ThumbnailWorker._normalize_rotation_angle(base_rotation)
+        effective_width = int(width)
+        effective_height = int(height)
+        if _ThumbnailWorker._rotation_swaps_dimensions(normalized_base):
+            effective_width, effective_height = effective_height, effective_width
+
+        if orientation == 0:
+            orientation_matches = effective_width >= effective_height
+        else:
+            orientation_matches = effective_height > effective_width
+
+        return normalized_base if orientation_matches else (normalized_base + 90) % 360
+
     def run(self) -> None:
         try:
             reader = VideoInfoReader()
@@ -98,7 +96,7 @@ class _ThumbnailWorker(QThread):
                     int(video_info.height),
                 )
 
-            rotate_angle = _normalize_rotation_angle(self._rotate_angle)
+            rotate_angle = self._normalize_rotation_angle(self._rotate_angle)
             recommended_rotation = None
             if self._preview_mode == "manual_crop":
                 # Manual crop must always use the original, unrotated frame so the
@@ -107,7 +105,7 @@ class _ThumbnailWorker(QThread):
             elif self._auto_detect_rotation:
                 eff_w = effective_crop.width if effective_crop is not None else video_info.width
                 eff_h = effective_crop.height if effective_crop is not None else video_info.height
-                recommended_rotation = _resolve_effective_rotation(
+                recommended_rotation = self._resolve_effective_rotation(
                     rotate_angle,
                     eff_w,
                     eff_h,
@@ -142,7 +140,7 @@ class _ThumbnailWorker(QThread):
             info_dict = {
                 "previewMode": self._preview_mode,
                 "durationAndResolution": (
-                    f"{_format_duration(video_info.duration_second)}"
+                    f"{self._format_duration(video_info.duration_second)}"
                     f" / {video_info.width}x{video_info.height}"
                 ),
                 "cropRect": {

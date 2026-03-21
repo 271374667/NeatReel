@@ -6,10 +6,6 @@ from PySide6.QtCore import Property, QCoreApplication, QObject, Signal, Slot
 from src.core.version import VersionHandler
 
 
-def _tr(text: str) -> str:
-    return QCoreApplication.translate("AboutService", text)
-
-
 class AboutService(QObject):
     isCheckingForUpdatesChanged = Signal()
     updateStatusTextChanged = Signal()
@@ -19,6 +15,10 @@ class AboutService(QObject):
         self._is_checking_for_updates = False
         self._update_status_text = ""
         self._update_thread: QThreadWithReturn | None = None
+
+    @staticmethod
+    def _tr(text: str) -> str:
+        return QCoreApplication.translate("AboutService", text)
 
     def _get_version(self) -> str:
         return VersionHandler.get_current_version()
@@ -64,22 +64,26 @@ class AboutService(QObject):
     def _build_update_status_text() -> str:
         updates, error = VersionHandler.check_for_updates_detailed()
         if error:
-            first_line = error.strip().splitlines()[0] if error.strip() else _tr("未知错误")
-            return _tr("检查更新失败：{message}").format(message=first_line)
+            first_line = (
+                error.strip().splitlines()[0]
+                if error.strip()
+                else AboutService._tr("未知错误")
+            )
+            return AboutService._tr("检查更新失败：{message}").format(message=first_line)
 
         if not updates:
-            return _tr("当前已是最新版本")
+            return AboutService._tr("当前已是最新版本")
 
         versions = [next(iter(item.keys())) for item in updates if item]
         if not versions:
-            return _tr("发现新版本，请前往仓库查看发布信息")
+            return AboutService._tr("发现新版本，请前往仓库查看发布信息")
 
         if len(versions) == 1:
-            return _tr("发现新版本：{version}").format(version=versions[0])
+            return AboutService._tr("发现新版本：{version}").format(version=versions[0])
 
         preview_versions = "、".join(versions[:3])
-        more_suffix = _tr(" 等") if len(versions) > 3 else ""
-        return _tr("发现新版本：{versions}{suffix}").format(
+        more_suffix = AboutService._tr(" 等") if len(versions) > 3 else ""
+        return AboutService._tr("发现新版本：{versions}{suffix}").format(
             versions=preview_versions,
             suffix=more_suffix,
         )
@@ -90,7 +94,7 @@ class AboutService(QObject):
             return
 
         self._set_is_checking_for_updates(True)
-        self._set_update_status_text(_tr("正在检查更新..."))
+        self._set_update_status_text(self._tr("正在检查更新..."))
 
         thread = QThreadWithReturn(
             self._build_update_status_text,
@@ -111,7 +115,7 @@ class AboutService(QObject):
     def _on_update_check_failed(self, exception: Exception) -> None:
         self._set_is_checking_for_updates(False)
         self._set_update_status_text(
-            _tr("检查更新失败：{message}").format(message=exception)
+            self._tr("检查更新失败：{message}").format(message=exception)
         )
 
     @Slot()
