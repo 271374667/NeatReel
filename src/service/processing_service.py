@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -21,6 +20,7 @@ from src.common.video_merger import (
 from src.core.paths import OUTPUT_DIR
 from src.image_provider import ThumbnailImageProvider
 from src.merge_signals import get_merge_signals
+from src.utils.window_utils import WindowUtils
 
 
 # ── helpers ──────────────────────────────────────────────────────
@@ -256,7 +256,6 @@ class ProcessingService(QObject):
         self._image_provider = image_provider
         self._worker: _MergeWorker | None = None
         self._output_path = OUTPUT_DIR / "output.mp4"
-        self._output_open_path = self._output_path.parent
         self._project_id = ""
         self._merge_into_one = True
 
@@ -316,10 +315,8 @@ class ProcessingService(QObject):
         self._merge_into_one = merge_into_one
         if merge_into_one:
             self._output_path = output_dir / f"{self._project_id}.mp4"
-            self._output_open_path = output_dir
         else:
             self._output_path = output_dir / self._project_id
-            self._output_open_path = self._output_path
 
         # Reset state
         self._total_files = 0
@@ -362,9 +359,11 @@ class ProcessingService(QObject):
 
     @Slot()
     def onOpenOutputDir(self) -> None:
-        output_dir = self._output_open_path.resolve()
         try:
-            subprocess.Popen(["explorer", str(output_dir)])
+            WindowUtils.open_explorer_target(
+                self._output_path,
+                select_file=self._merge_into_one,
+            )
         except Exception:
             logger.exception("Failed to open output directory")
 
