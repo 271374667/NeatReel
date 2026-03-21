@@ -42,21 +42,21 @@ Item {
         return !!textItem && textItem.implicitWidth > textItem.width + 0.5
     }
     readonly property var hoveredOverflowTarget: {
-        if (fileNameHoverArea.containsMouse && root.isTextOverflowing(fileNameValue))
-            return fileNameHoverArea
-        if (filePathHoverArea.containsMouse && root.isTextOverflowing(filePathValue))
-            return filePathHoverArea
-        if (durationAndResolutionHoverArea.containsMouse
+        if (fileNameFieldHover.hovered && root.isTextOverflowing(fileNameValue))
+            return fileNameField
+        if (filePathFieldHover.hovered && root.isTextOverflowing(filePathValue))
+            return filePathField
+        if (durationAndResolutionFieldHover.hovered
                 && root.isTextOverflowing(durationAndResolutionValue))
-            return durationAndResolutionHoverArea
+            return durationAndResolutionField
         return null
     }
     readonly property string hoveredOverflowText: {
-        if (hoveredOverflowTarget === fileNameHoverArea)
+        if (hoveredOverflowTarget === fileNameField)
             return fileNameValue.text
-        if (hoveredOverflowTarget === filePathHoverArea)
+        if (hoveredOverflowTarget === filePathField)
             return filePathValue.text
-        if (hoveredOverflowTarget === durationAndResolutionHoverArea)
+        if (hoveredOverflowTarget === durationAndResolutionField)
             return durationAndResolutionValue.text
         return ""
     }
@@ -204,8 +204,13 @@ Item {
 
             // ── 文件名 ──
             Column {
+                id: fileNameField
                 spacing: 4
                 Layout.fillWidth: true
+
+                HoverHandler {
+                    id: fileNameFieldHover
+                }
 
                 Text {
                     text: qsTr("文件名")
@@ -227,20 +232,18 @@ Item {
                     width: parent.width
                     maximumLineCount: 1
                     renderType: Text.NativeRendering
-
-                    MouseArea {
-                        id: fileNameHoverArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
-                    }
                 }
             }
 
             // ── 文件路径 ──
             Column {
+                id: filePathField
                 spacing: 4
                 Layout.fillWidth: true
+
+                HoverHandler {
+                    id: filePathFieldHover
+                }
 
                 Text {
                     text: qsTr("文件路径")
@@ -262,20 +265,18 @@ Item {
                     width: parent.width
                     maximumLineCount: 1
                     renderType: Text.NativeRendering
-
-                    MouseArea {
-                        id: filePathHoverArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
-                    }
                 }
             }
 
             // ── 总时长 / 原始分辨率 ──
             Column {
+                id: durationAndResolutionField
                 spacing: 4
                 Layout.fillWidth: true
+
+                HoverHandler {
+                    id: durationAndResolutionFieldHover
+                }
 
                 Text {
                     text: qsTr("总时长 / 原始分辨率")
@@ -297,13 +298,6 @@ Item {
                     width: parent.width
                     maximumLineCount: 1
                     renderType: Text.NativeRendering
-
-                    MouseArea {
-                        id: durationAndResolutionHoverArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
-                    }
                 }
             }
 
