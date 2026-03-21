@@ -22,7 +22,7 @@ Item {
     property int processingStatus: 0 // 0: 进行中, 1: 完成, 2: 错误
     property int displayState: 0
     property url frameSource: ""
-    property bool preprocessVisible: true
+    property bool preprocessVisible: false
     property int preprocessCurrent: 0
     property int preprocessTotal: 0
 
@@ -72,6 +72,8 @@ Item {
                                                 && root.preprocessTotal > 0
                                                 && root.preprocessCurrent < root.preprocessTotal
     readonly property bool showPreprocessOverlay: root.visible && (root.preprocessVisible || root.hasPendingPreprocess)
+    readonly property bool isStageTextOverflowing: processingStageText.implicitWidth > processingStageText.width + 0.5
+    property bool stagePathTooltipReady: false
 
     function refreshPreprocessStateFromService() {
         if (!processingService)
@@ -93,6 +95,13 @@ Item {
     }
 
     Component.onCompleted: refreshPreprocessStateFromService()
+
+    Timer {
+        id: stagePathTooltipTimer
+        interval: 220
+        repeat: false
+        onTriggered: root.stagePathTooltipReady = stageTextHover.hovered && root.isStageTextOverflowing
+    }
 
     component StatCard: Rectangle {
         id: statCard
@@ -400,13 +409,26 @@ Item {
                     spacing: 6
 
                     Text {
+                        id: processingStageText
                         text: root.displayStageName
                         Layout.fillWidth: true
                         font.pixelSize: 12
                         font.family: appFontFamily
                         color: "#4e5964"
-                        elide: Text.ElideRight
+                        elide: Text.ElideMiddle
                         renderType: Text.NativeRendering
+
+                        HoverHandler {
+                            id: stageTextHover
+                            onHoveredChanged: {
+                                root.stagePathTooltipReady = false
+                                if (hovered && root.isStageTextOverflowing) {
+                                    stagePathTooltipTimer.restart()
+                                } else {
+                                    stagePathTooltipTimer.stop()
+                                }
+                            }
+                        }
                     }
 
                     Text {
@@ -559,6 +581,42 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    ToolTip {
+        id: stagePathToolTip
+        parent: root.Window.window ? root.Window.window.contentItem : root
+        visible: root.stagePathTooltipReady && stageTextHover.hovered && root.isStageTextOverflowing
+        delay: 0
+        timeout: 5000
+        text: root.displayStageName
+
+        x: {
+            if (!parent)
+                return 0
+
+            var pos = processingStageText.mapToItem(parent, 0, 0)
+            var margin = 12
+            var maxX = Math.max(margin, parent.width - implicitWidth - margin)
+            return Math.max(margin, Math.min(pos.x, maxX))
+        }
+
+        y: {
+            if (!parent)
+                return 0
+
+            var margin = 12
+            var gap = 8
+            var topPos = processingStageText.mapToItem(parent, 0, 0).y
+            var bottomPos = processingStageText.mapToItem(parent, 0, processingStageText.height).y
+            var belowY = bottomPos + gap
+            var aboveY = topPos - implicitHeight - gap
+
+            if (belowY + implicitHeight <= parent.height - margin)
+                return belowY
+
+            return Math.max(margin, aboveY)
         }
     }
 
