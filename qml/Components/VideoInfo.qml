@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.FluentWinUI3
 import QtQuick.Layouts
+import QtQuick.Window
 import "../"
 
 Item {
@@ -37,6 +38,45 @@ Item {
     property color valueColor: "#1a1a1a"             // 值文字颜色（深色）
     property color accentColor: "#0078D4"            // 强调色（旋转角度高亮）
     property color iconTintColor: "#0078D4"          // 图标着色
+    function isTextOverflowing(textItem) {
+        return !!textItem && textItem.implicitWidth > textItem.width + 0.5
+    }
+    readonly property var hoveredOverflowTarget: {
+        if (fileNameHoverArea.containsMouse && root.isTextOverflowing(fileNameValue))
+            return fileNameHoverArea
+        if (filePathHoverArea.containsMouse && root.isTextOverflowing(filePathValue))
+            return filePathHoverArea
+        if (durationAndResolutionHoverArea.containsMouse
+                && root.isTextOverflowing(durationAndResolutionValue))
+            return durationAndResolutionHoverArea
+        return null
+    }
+    readonly property string hoveredOverflowText: {
+        if (hoveredOverflowTarget === fileNameHoverArea)
+            return fileNameValue.text
+        if (hoveredOverflowTarget === filePathHoverArea)
+            return filePathValue.text
+        if (hoveredOverflowTarget === durationAndResolutionHoverArea)
+            return durationAndResolutionValue.text
+        return ""
+    }
+    property bool overflowTooltipReady: false
+
+    onHoveredOverflowTargetChanged: {
+        overflowTooltipReady = false
+        if (hoveredOverflowTarget) {
+            overflowTooltipTimer.restart()
+        } else {
+            overflowTooltipTimer.stop()
+        }
+    }
+
+    Timer {
+        id: overflowTooltipTimer
+        interval: 220
+        repeat: false
+        onTriggered: root.overflowTooltipReady = root.hoveredOverflowTarget !== null
+    }
 
     // ══════════════════════════════════════
     //  阴影层（与 FluentPane 风格统一）
@@ -177,6 +217,7 @@ Item {
                 }
 
                 Text {
+                    id: fileNameValue
                     text: root.fileName || qsTr("—")
                     font.pixelSize: 14
                     font.family: appFontFamily
@@ -186,6 +227,13 @@ Item {
                     width: parent.width
                     maximumLineCount: 1
                     renderType: Text.NativeRendering
+
+                    MouseArea {
+                        id: fileNameHoverArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
                 }
             }
 
@@ -204,6 +252,7 @@ Item {
                 }
 
                 Text {
+                    id: filePathValue
                     text: root.filePath || qsTr("—")
                     font.pixelSize: 14
                     font.family: appFontFamily
@@ -213,6 +262,13 @@ Item {
                     width: parent.width
                     maximumLineCount: 1
                     renderType: Text.NativeRendering
+
+                    MouseArea {
+                        id: filePathHoverArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
                 }
             }
 
@@ -231,6 +287,7 @@ Item {
                 }
 
                 Text {
+                    id: durationAndResolutionValue
                     text: root.durationAndResolution || qsTr("—")
                     font.pixelSize: 14
                     font.family: appFontFamily
@@ -240,6 +297,13 @@ Item {
                     width: parent.width
                     maximumLineCount: 1
                     renderType: Text.NativeRendering
+
+                    MouseArea {
+                        id: durationAndResolutionHoverArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
                 }
             }
 
@@ -269,6 +333,42 @@ Item {
                     renderType: Text.NativeRendering
                 }
             }
+        }
+    }
+
+    ToolTip {
+        id: overflowToolTip
+        parent: root.Window.window ? root.Window.window.contentItem : root
+        visible: root.overflowTooltipReady && root.hoveredOverflowTarget !== null
+        delay: 0
+        timeout: 5000
+        text: root.hoveredOverflowText
+
+        x: {
+            if (!root.hoveredOverflowTarget || !parent)
+                return 0
+
+            var pos = root.hoveredOverflowTarget.mapToItem(parent, 0, 0)
+            var margin = 12
+            var maxX = Math.max(margin, parent.width - implicitWidth - margin)
+            return Math.max(margin, Math.min(pos.x, maxX))
+        }
+
+        y: {
+            if (!root.hoveredOverflowTarget || !parent)
+                return 0
+
+            var margin = 12
+            var gap = 8
+            var topPos = root.hoveredOverflowTarget.mapToItem(parent, 0, 0).y
+            var bottomPos = root.hoveredOverflowTarget.mapToItem(parent, 0, root.hoveredOverflowTarget.height).y
+            var belowY = bottomPos + gap
+            var aboveY = topPos - implicitHeight - gap
+
+            if (belowY + implicitHeight <= parent.height - margin)
+                return belowY
+
+            return Math.max(margin, aboveY)
         }
     }
 }

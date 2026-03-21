@@ -705,6 +705,13 @@ Item {
                         property real pressStartY: 0
                         property bool dragActive: false
 
+                        ToolTip {
+                            parent: itemMouse
+                            visible: itemMouse.containsMouse && !dragState.isDragging
+                            delay: 200
+                            text: root.getFileName(delegateRoot.filePath)
+                        }
+
                         onClicked: function(mouse) {
                             if (mouse.modifiers & Qt.ControlModifier) {
                                 root.toggleSelect(delegateRoot.index);
