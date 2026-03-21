@@ -2,7 +2,7 @@ import json
 import urllib.request
 import urllib.error
 
-__version__ = "v1.18.17"
+__version__ = "v1.25.28"
 
 
 class VersionHandler:
