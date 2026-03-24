@@ -1,14 +1,17 @@
+import os
 import sys
 from pathlib import Path
 
+from loguru import logger
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 
+from src.common.logging_setup import ensure_app_logger_configured
 from src.common.startup_trace import StartupTrace
 from src.common.language_manager import LanguageManager
 from src.common.single_instance_guard import NeatReelSingleInstanceGuard
-from src.core.paths import LOGO_FILE
+from src.core.paths import LOGO_FILE, PROJECT_ROOT
 from src.image_provider import ThumbnailImageProvider
 from src.resources.runtime_resources import ensure_qml_resources_registered
 from src.service.about_service import AboutService
@@ -20,6 +23,7 @@ DEBUG: bool = False
 APP_FONT_PATH = Path(__file__).resolve().parent / "qml" / "Fonts" / "AlibabaPuHuiTi-3-55-Regular.ttf"
 APP_FONT_RESOURCE = ":/qml/Fonts/AlibabaPuHuiTi-3-55-Regular.ttf"
 APP_FONT_FAMILY_FALLBACK = "Alibaba PuHuiTi 3.0"
+QT_QUICK_CONTROLS_CONF = PROJECT_ROOT / "qtquickcontrols2.conf"
 
 
 def resolve_window_icon(debug: bool) -> QIcon:
@@ -71,10 +75,19 @@ def update_application_display_name(app: QGuiApplication, language_manager: Lang
     app.setApplicationDisplayName(display_name)
 
 
+def configure_qtquickcontrols_conf() -> None:
+    if QT_QUICK_CONTROLS_CONF.exists():
+        os.environ.setdefault("QT_QUICK_CONTROLS_CONF", str(QT_QUICK_CONTROLS_CONF))
+
+
 def main(*, debug: bool = DEBUG) -> None:
+    ensure_app_logger_configured()
+    logger.info("NeatReel starting (debug={})", debug)
+    configure_qtquickcontrols_conf()
     startup_trace = StartupTrace()
     instance_guard = NeatReelSingleInstanceGuard()
     if instance_guard.has_running_instance():
+        logger.warning("Another NeatReel instance is already running")
         startup_trace.mark("single_instance_detected")
         startup_trace.flush(success=False, note="already_running")
         instance_guard.show_warning_and_exit()
@@ -121,11 +134,13 @@ def main(*, debug: bool = DEBUG) -> None:
     app.setWindowIcon(resolve_window_icon(debug))  # 图标设在 load_main_qml 之后，不然读不出来
 
     if not engine.rootObjects():
+        logger.error("QML root objects are missing, startup failed")
         startup_trace.flush(success=False, note="root_objects_missing")
         sys.exit(-1)
 
     startup_trace.mark("root_objects_ready")
     startup_trace.flush(success=True)
+    logger.info("NeatReel started successfully")
     QTimer.singleShot(0, close_pyinstaller_splash)
     sys.exit(app.exec())
 

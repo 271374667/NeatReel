@@ -16,12 +16,13 @@ LAUNCHER_FILE = BUILD_ROOT / "_release_main.py"
 ICON_FILE = PROJECT_ROOT / "qml" / "Images" / "SmallLogo.png"
 SPLASH_FILE = PROJECT_ROOT / "qml" / "Images" / "Splash.png"
 RCC_RESOURCE_FILE = PROJECT_ROOT / "src" / "resources" / "qml_resources.rcc"
+QT_QUICK_CONTROLS_CONF = PROJECT_ROOT / "qtquickcontrols2.conf"
 
 
 def run_compile_resources() -> None:
     subprocess.run([sys.executable, str(COMPILE_SCRIPT)], cwd=PROJECT_ROOT, check=True)
 
-
+ 
 def write_release_launcher() -> Path:
     BUILD_ROOT.mkdir(parents=True, exist_ok=True)
     LAUNCHER_FILE.write_text(
@@ -64,6 +65,8 @@ def run_pyinstaller_build() -> None:
     ]
     if RCC_RESOURCE_FILE.exists():
         command.extend(["--add-data", format_add_data(RCC_RESOURCE_FILE, "src/resources")])
+    if QT_QUICK_CONTROLS_CONF.exists():
+        command.extend(["--add-data", format_add_data(QT_QUICK_CONTROLS_CONF, ".")])
     if ICON_FILE.exists():
         command.extend(["--icon", str(ICON_FILE)])
     if SPLASH_FILE.exists():
