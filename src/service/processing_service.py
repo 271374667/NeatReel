@@ -9,14 +9,6 @@ from loguru import logger
 from PySide6.QtCore import QCoreApplication, QObject, Property, QThread, QTimer, QUuid, QUrl, Signal, Slot
 from PySide6.QtGui import QImage
 
-from src.common.video_info_reader import CropResult, VideoInfoReader
-from src.common.video_merger import (
-    InputVideoInfo,
-    Orientation,
-    Rotation,
-    VideoMerger,
-    VideoProcessMode,
-)
 from src.core.paths import OUTPUT_DIR
 from src.image_provider import ThumbnailImageProvider
 from src.merge_signals import get_merge_signals
@@ -24,20 +16,30 @@ from src.utils.window_utils import WindowUtils
 
 
 # ── helpers ──────────────────────────────────────────────────────
-_ROTATION_MAP = {
-    0: Rotation.ROTATE_0,
-    90: Rotation.ROTATE_90,
-    180: Rotation.ROTATE_180,
-    270: Rotation.ROTATE_270,
-}
-
 _PROCESS_MODE_MAP = {
-    0: VideoProcessMode.SPEED,
-    1: VideoProcessMode.BALANCED,
-    2: VideoProcessMode.QUALITY,
-    3: VideoProcessMode.GPU,
+    0: "speed",
+    1: "balanced",
+    2: "quality",
+    3: "gpu",
 }
+_ORIENTATION_HORIZONTAL = "horizontal"
+_ORIENTATION_VERTICAL = "vertical"
 _MERGE_CANCELLED_MESSAGE = "已取消"
+
+
+def _load_processing_runtime():
+    from src.common.video_info_reader import CropResult, VideoInfoReader
+    from src.common.video_merger import InputVideoInfo, Orientation, Rotation, VideoMerger, VideoProcessMode
+
+    return {
+        "CropResult": CropResult,
+        "InputVideoInfo": InputVideoInfo,
+        "Orientation": Orientation,
+        "Rotation": Rotation,
+        "VideoInfoReader": VideoInfoReader,
+        "VideoMerger": VideoMerger,
+        "VideoProcessMode": VideoProcessMode,
+    }
 
 
 # ── merge worker ─────────────────────────────────────────────────
@@ -47,16 +49,16 @@ class _MergeWorker(QThread):
     def __init__(
         self,
         video_items: list[dict],
-        process_mode: VideoProcessMode,
-        orientation: Orientation,
+        process_mode_key: str,
+        orientation_key: str,
         cover_path: Path | None,
         output_path: Path,
         merge_into_one: bool,
     ):
         super().__init__()
         self._video_items = video_items
-        self._process_mode = process_mode
-        self._orientation = orientation
+        self._process_mode_key = process_mode_key
+        self._orientation_key = orientation_key
         self._cover_path = cover_path
         self._output_path = output_path
         self._merge_into_one = merge_into_one
@@ -71,7 +73,35 @@ class _MergeWorker(QThread):
     def run(self) -> None:
         signals = get_merge_signals()
         try:
-            def _manual_crop_from_item(item: dict) -> CropResult | None:
+            runtime = _load_processing_runtime()
+            crop_result_cls = runtime["CropResult"]
+            input_video_info_cls = runtime["InputVideoInfo"]
+            orientation_enum = runtime["Orientation"]
+            rotation_enum = runtime["Rotation"]
+            video_info_reader_cls = runtime["VideoInfoReader"]
+            video_merger_cls = runtime["VideoMerger"]
+            video_process_mode_enum = runtime["VideoProcessMode"]
+
+            rotation_map = {
+                0: rotation_enum.ROTATE_0,
+                90: rotation_enum.ROTATE_90,
+                180: rotation_enum.ROTATE_180,
+                270: rotation_enum.ROTATE_270,
+            }
+            process_mode_map = {
+                "speed": video_process_mode_enum.SPEED,
+                "balanced": video_process_mode_enum.BALANCED,
+                "quality": video_process_mode_enum.QUALITY,
+                "gpu": video_process_mode_enum.GPU,
+            }
+            process_mode = process_mode_map.get(self._process_mode_key, video_process_mode_enum.QUALITY)
+            orientation = (
+                orientation_enum.HORIZONTAL
+                if self._orientation_key == _ORIENTATION_HORIZONTAL
+                else orientation_enum.VERTICAL
+            )
+
+            def _manual_crop_from_item(item: dict):
                 if not item.get("manualCropEnabled"):
                     return None
 
@@ -86,7 +116,7 @@ class _MergeWorker(QThread):
                 if width <= 0 or height <= 0:
                     return None
 
-                return CropResult(
+                return crop_result_cls(
                     x=x,
                     y=y,
                     width=width,
@@ -96,7 +126,7 @@ class _MergeWorker(QThread):
                 )
 
             def _read_single(item: dict):
-                reader = VideoInfoReader()
+                reader = video_info_reader_cls()
                 path = Path(item["filePath"])
                 use_auto_crop = bool(item.get("autoCropEnabled", True))
                 manual_crop = _manual_crop_from_item(item)
@@ -108,14 +138,14 @@ class _MergeWorker(QThread):
                 effective_crop = None
                 if use_auto_crop:
                     effective_crop = manual_crop if manual_crop is not None else info.crop_result
-                    effective_crop = VideoInfoReader.normalize_crop_result(
+                    effective_crop = video_info_reader_cls.normalize_crop_result(
                         effective_crop,
                         int(info.width),
                         int(info.height),
                     )
                 return item, info, effective_crop
 
-            results: list[tuple[dict, object, CropResult | None] | None] = [None] * len(self._video_items)
+            results = [None] * len(self._video_items)
             total_items = len(self._video_items)
             with ThreadPoolExecutor() as pool:
                 future_to_index = {
@@ -129,7 +159,7 @@ class _MergeWorker(QThread):
                     completed += 1
                     signals.preprocessProgress.emit(completed, total_items)
 
-            input_files: list[InputVideoInfo] = []
+            input_files = []
             for result in results:
                 if result is None:
                     continue
@@ -139,9 +169,9 @@ class _MergeWorker(QThread):
                     int(item.get("rotation", 0)),
                     manually_edited,
                 )
-                rotation = _ROTATION_MAP.get(angle, Rotation.ROTATE_0)
+                rotation = rotation_map.get(angle, rotation_enum.ROTATE_0)
                 input_files.append(
-                    InputVideoInfo(
+                    input_video_info_cls(
                         file_path=Path(item["filePath"]),
                         crop_result=effective_crop,
                         rotation=rotation,
@@ -154,23 +184,23 @@ class _MergeWorker(QThread):
                     )
                 )
 
-            merger = VideoMerger()
+            merger = video_merger_cls()
             if self._merge_into_one:
                 merger.merge(
                     input_files=input_files,
                     output_file=self._output_path,
-                    process_mode=self._process_mode,
+                    process_mode=process_mode,
                     enable_border_detection=False,
-                    orientation=self._orientation,
+                    orientation=orientation,
                     cover_image_path=self._cover_path,
                 )
             else:
                 merger.export_separately(
                     input_files=input_files,
                     output_dir=self._output_path,
-                    process_mode=self._process_mode,
+                    process_mode=process_mode,
                     enable_border_detection=False,
-                    orientation=self._orientation,
+                    orientation=orientation,
                     cover_image_path=self._cover_path,
                 )
         except Exception:
@@ -304,8 +334,8 @@ class ProcessingService(QObject):
         output_directory: str,
         video_items: list,
     ) -> None:
-        process_mode = _PROCESS_MODE_MAP.get(process_mode_index, VideoProcessMode.QUALITY)
-        orientation = Orientation.HORIZONTAL if is_landscape else Orientation.VERTICAL
+        process_mode_key = _PROCESS_MODE_MAP.get(process_mode_index, "quality")
+        orientation_key = _ORIENTATION_HORIZONTAL if is_landscape else _ORIENTATION_VERTICAL
         merge_into_one = output_mode_index == 0
 
         cover = self._coerce_local_path(cover_path)
@@ -348,7 +378,12 @@ class ProcessingService(QObject):
         get_merge_signals().reset()
 
         self._worker = _MergeWorker(
-            video_items, process_mode, orientation, cover, self._output_path, merge_into_one
+            video_items,
+            process_mode_key,
+            orientation_key,
+            cover,
+            self._output_path,
+            merge_into_one,
         )
         self._worker.start()
 

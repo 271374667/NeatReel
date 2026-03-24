@@ -8,6 +8,7 @@ from collections import Counter
 from enum import Enum
 import math
 import sys
+import threading
 
 import av
 import numpy as np
@@ -20,16 +21,31 @@ from src.common.video_info_reader import VideoInfoReader, CropResult
 from src.merge_signals import MergeCancelled, get_merge_signals
 from dataclasses import dataclass
 
-logger.remove()
-logger.add(
-    "log.log",
-    level="DEBUG",
-    encoding="utf-8",
-    enqueue=True,
-)
-stderr_sink = sys.stderr or sys.__stderr__
-if stderr_sink is not None:
-    logger.add(stderr_sink, level="INFO")
+_logger_configured = False
+_logger_lock = threading.Lock()
+
+
+def ensure_video_merger_logger_configured() -> None:
+    global _logger_configured
+    if _logger_configured:
+        return
+
+    with _logger_lock:
+        if _logger_configured:
+            return
+
+        logger.remove()
+        logger.add(
+            "log.log",
+            level="DEBUG",
+            encoding="utf-8",
+            enqueue=True,
+        )
+        stderr_sink = sys.stderr or sys.__stderr__
+        if stderr_sink is not None:
+            logger.add(stderr_sink, level="INFO")
+
+        _logger_configured = True
 
 
 @dataclass(frozen=True)
@@ -220,6 +236,7 @@ class VideoMerger:
         if target_fps != -1 and target_fps <= 0:
             raise ValueError("target_fps 必须为 -1 或正整数")
 
+        ensure_video_merger_logger_configured()
         signals = get_merge_signals()
 
         # ===== 预处理: 收集裁剪、旋转信息、有效尺寸、帧率和音频采样率 =====
@@ -588,6 +605,7 @@ class VideoMerger:
             self._resolve_input_profile(video_info, orientation, enable_border_detection)
             for video_info in input_files
         ]
+        ensure_video_merger_logger_configured()
         output_dir.mkdir(parents=True, exist_ok=True)
         signals.mergeStarted.emit(len(input_files), 30.0)
 

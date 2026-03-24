@@ -1,14 +1,38 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
 from PySide6.QtCore import Property, QObject, QThread, QUrl, Signal, Slot
 from PySide6.QtGui import QImage
 
-from src.common.video_info_reader import VideoInfoReader, CropResult
 from src.core.paths import OUTPUT_DIR
 from src.image_provider import ThumbnailImageProvider, pil_to_qimage
+
+
+@dataclass(frozen=True)
+class CropOverride:
+    x: int
+    y: int
+    width: int
+    height: int
+
+    def to_reader_crop_result(self, crop_result_cls: type) -> object:
+        return crop_result_cls(
+            x=int(self.x),
+            y=int(self.y),
+            width=int(self.width),
+            height=int(self.height),
+            confidence=1.0,
+            has_border=True,
+        )
+
+
+def _load_video_info_reader_classes() -> tuple[type, type]:
+    from src.common.video_info_reader import CropResult, VideoInfoReader
+
+    return CropResult, VideoInfoReader
 
 # ── thumbnail worker ─────────────────────────────────────────────
 class _ThumbnailWorker(QThread):
@@ -23,7 +47,7 @@ class _ThumbnailWorker(QThread):
         video_path: str,
         rotate_angle: int,
         orientation: int,
-        crop_override: CropResult | None,
+        crop_override: CropOverride | None,
         use_auto_crop: bool,
         preview_mode: str,
         auto_detect_rotation: bool = False,
@@ -75,8 +99,13 @@ class _ThumbnailWorker(QThread):
 
     def run(self) -> None:
         try:
-            reader = VideoInfoReader()
-            read_crop_override = self._crop_override if self._use_auto_crop else None
+            crop_result_cls, video_info_reader_cls = _load_video_info_reader_classes()
+            reader = video_info_reader_cls()
+            read_crop_override = (
+                self._crop_override.to_reader_crop_result(crop_result_cls)
+                if self._use_auto_crop and self._crop_override is not None
+                else None
+            )
             video_info = reader.read_info(
                 Path(self._video_path),
                 crop_result=read_crop_override,
@@ -85,12 +114,16 @@ class _ThumbnailWorker(QThread):
 
             effective_crop = None
             if self._use_auto_crop:
-                effective_crop = self._crop_override
+                effective_crop = (
+                    self._crop_override.to_reader_crop_result(crop_result_cls)
+                    if self._crop_override is not None
+                    else None
+                )
                 if effective_crop is None:
                     detected_crop = video_info.crop_result
                     if detected_crop is not None and detected_crop.has_border:
                         effective_crop = detected_crop
-                effective_crop = VideoInfoReader.normalize_crop_result(
+                effective_crop = video_info_reader_cls.normalize_crop_result(
                     effective_crop,
                     int(video_info.width),
                     int(video_info.height),
@@ -128,7 +161,7 @@ class _ThumbnailWorker(QThread):
                 )
 
             qimage = pil_to_qimage(pil_image)
-            crop_rect = effective_crop or CropResult(
+            crop_rect = effective_crop or crop_result_cls(
                 x=0,
                 y=0,
                 width=int(video_info.width),
@@ -198,7 +231,7 @@ class HomeService(QObject):
         file_path: str,
         rotate_angle: int,
         orientation: int,
-        crop_override: CropResult | None,
+        crop_override: CropOverride | None,
         use_auto_crop: bool,
         preview_mode: str,
         auto_detect_rotation: bool = False,
@@ -273,7 +306,7 @@ class HomeService(QObject):
         self.displayStateChanged.emit(3)  # Error
 
     @staticmethod
-    def _coerce_crop_result(crop_data: dict | None) -> CropResult | None:
+    def _coerce_crop_result(crop_data: dict | None) -> CropOverride | None:
         if not crop_data:
             return None
 
@@ -288,13 +321,11 @@ class HomeService(QObject):
         if width <= 0 or height <= 0:
             return None
 
-        return CropResult(
+        return CropOverride(
             x=x,
             y=y,
             width=width,
             height=height,
-            confidence=1.0,
-            has_border=True,
         )
 
     @Slot(str, result=str)

@@ -12,6 +12,7 @@ QML_DIR = PROJECT_ROOT / "qml"
 I18N_DIR = QML_DIR / "i18n"
 RESOURCE_DIR = PROJECT_ROOT / "src" / "resources"
 QRC_FILE = RESOURCE_DIR / "qml_resources.qrc"
+RCC_RESOURCE_FILE = RESOURCE_DIR / "qml_resources.rcc"
 PY_RESOURCE_FILE = RESOURCE_DIR / "qml_resources.py"
 QRC_PREFIX = "/qml"
 RESOURCE_EXCLUDED_SUFFIXES = {".ts", ".pro"}
@@ -116,11 +117,16 @@ def compile_resources() -> None:
 
     QRC_FILE.write_text(build_qrc_content(files), encoding="utf-8")
 
-    command = [*find_rcc_command(), str(QRC_FILE), "-o", str(PY_RESOURCE_FILE)]
+    command = [*find_rcc_command(), "--binary", str(QRC_FILE), "-o", str(RCC_RESOURCE_FILE)]
     subprocess.run(command, cwd=PROJECT_ROOT, check=True)
+    if PY_RESOURCE_FILE.exists():
+        try:
+            PY_RESOURCE_FILE.unlink()
+        except OSError as exc:
+            print(f"Warning: failed to remove stale resource module {PY_RESOURCE_FILE.name}: {exc}")
 
     print(f"Generated: {QRC_FILE.relative_to(PROJECT_ROOT)}")
-    print(f"Generated: {PY_RESOURCE_FILE.relative_to(PROJECT_ROOT)}")
+    print(f"Generated: {RCC_RESOURCE_FILE.relative_to(PROJECT_ROOT)}")
     for qm_file in generated_translations:
         print(f"Compiled translation: {qm_file.relative_to(PROJECT_ROOT)}")
     for font_file in REQUIRED_RESOURCE_FILES:

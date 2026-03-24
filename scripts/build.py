@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,7 @@ COMPILE_SCRIPT = PROJECT_ROOT / "scripts" / "compile.py"
 LAUNCHER_FILE = BUILD_ROOT / "_release_main.py"
 ICON_FILE = PROJECT_ROOT / "qml" / "Images" / "SmallLogo.png"
 SPLASH_FILE = PROJECT_ROOT / "qml" / "Images" / "Splash.png"
+RCC_RESOURCE_FILE = PROJECT_ROOT / "src" / "resources" / "qml_resources.rcc"
 
 
 def run_compile_resources() -> None:
@@ -36,6 +38,11 @@ def clean_previous_output() -> None:
         shutil.rmtree(DIST_DIR)
 
 
+def format_add_data(source: Path, destination: str) -> str:
+    separator = ";" if os.name == "nt" else ":"
+    return f"{source}{separator}{destination}"
+
+
 def run_pyinstaller_build() -> None:
     launcher_file = write_release_launcher()
     command = [
@@ -54,9 +61,9 @@ def run_pyinstaller_build() -> None:
         str(BUILD_ROOT / "work"),
         "--specpath",
         str(BUILD_ROOT),
-        "--hidden-import",
-        "src.resources.qml_resources",
     ]
+    if RCC_RESOURCE_FILE.exists():
+        command.extend(["--add-data", format_add_data(RCC_RESOURCE_FILE, "src/resources")])
     if ICON_FILE.exists():
         command.extend(["--icon", str(ICON_FILE)])
     if SPLASH_FILE.exists():

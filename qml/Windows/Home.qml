@@ -25,7 +25,7 @@ Item {
     property var currentCropRect: ({})
     property int selectedManualRotationAngle: 0
     property bool selectedManualRotationEdited: false
-    property string defaultOutputDirectory: homeService.defaultOutputDirectory
+    property string defaultOutputDirectory: homeService ? homeService.defaultOutputDirectory : ""
     property string outputDirectory: defaultOutputDirectory
     readonly property string currentFilePath: videoInfoItem.filePath
     readonly property int currentRotationAngle: videoInfoItem.rotationAngle
@@ -175,6 +175,12 @@ Item {
         }
     }
 
+    Component.onCompleted: {
+        if (!root.outputDirectory && homeService) {
+            root.outputDirectory = homeService.defaultOutputDirectory
+        }
+    }
+
     Timer {
         id: orientationDebounceTimer
         interval: 1000
@@ -197,9 +203,11 @@ Item {
     FolderDialog {
         id: outputFolderDialog
         title: qsTr("选择输出文件夹")
-        currentFolder: homeService.localPathToUrl(root.outputDirectory)
+        currentFolder: homeService ? homeService.localPathToUrl(root.outputDirectory) : ""
         onAccepted: {
-            root.outputDirectory = homeService.normalizeLocalPath(selectedFolder.toString())
+            if (homeService) {
+                root.outputDirectory = homeService.normalizeLocalPath(selectedFolder.toString())
+            }
         }
     }
 
