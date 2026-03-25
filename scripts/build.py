@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from change_version import PYINSTALLER_VERSION_FILE, sync_version_files
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BUILD_ROOT = PROJECT_ROOT / "build" / "pyinstaller"
@@ -22,7 +24,7 @@ QT_QUICK_CONTROLS_CONF = PROJECT_ROOT / "qtquickcontrols2.conf"
 def run_compile_resources() -> None:
     subprocess.run([sys.executable, str(COMPILE_SCRIPT)], cwd=PROJECT_ROOT, check=True)
 
- 
+
 def write_release_launcher() -> Path:
     BUILD_ROOT.mkdir(parents=True, exist_ok=True)
     LAUNCHER_FILE.write_text(
@@ -36,7 +38,13 @@ def write_release_launcher() -> Path:
 
 def clean_previous_output() -> None:
     if DIST_DIR.exists():
-        shutil.rmtree(DIST_DIR)
+        try:
+            shutil.rmtree(DIST_DIR)
+        except PermissionError as exc:
+            raise RuntimeError(
+                f"无法删除旧的打包目录 {DIST_DIR}。请先关闭正在运行的 NeatReel.exe "
+                "或释放对 dist/NeatReel 的占用后重试。"
+            ) from exc
 
 
 def format_add_data(source: Path, destination: str) -> str:
@@ -46,6 +54,7 @@ def format_add_data(source: Path, destination: str) -> str:
 
 def run_pyinstaller_build() -> None:
     launcher_file = write_release_launcher()
+    sync_version_files()
     command = [
         sys.executable,
         "-m",
@@ -62,6 +71,8 @@ def run_pyinstaller_build() -> None:
         str(BUILD_ROOT / "work"),
         "--specpath",
         str(BUILD_ROOT),
+        "--version-file",
+        str(PYINSTALLER_VERSION_FILE),
     ]
     if RCC_RESOURCE_FILE.exists():
         command.extend(["--add-data", format_add_data(RCC_RESOURCE_FILE, "src/resources")])
