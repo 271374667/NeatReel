@@ -652,11 +652,12 @@ Item {
                                 Layout.fillWidth: true
                                 text: root.getFileName(delegateRoot.filePath)
                                 font.pixelSize: 13
-                                font.weight: Font.Medium
+                                font.weight: Font.Normal
                                 font.family: appFontFamily
                                 color: "#1a1a1a"
                                 elide: Text.ElideRight
                                 maximumLineCount: 1
+                                renderType: Text.QtRendering
                             }
 
                             // 视频路径（中间省略）
@@ -668,6 +669,7 @@ Item {
                                 color: "#888888"
                                 elide: Text.ElideRight
                                 maximumLineCount: 1
+                                renderType: Text.QtRendering
                             }
 
                             Item { Layout.fillHeight: true }  // 下方弹簧
@@ -686,6 +688,7 @@ Item {
                         font.weight: Font.Normal
                         color: delegateRoot.isSelected ? "#0078D4" : "#aaaaaa"
                         opacity: delegateRoot.isBeingDragged ? 0.5 : 1.0
+                        renderType: Text.QtRendering
                         Behavior on color {
                             ColorAnimation { duration: 160 }
                         }
@@ -1023,6 +1026,7 @@ Item {
                     color: "#999999"
                     font.pixelSize: 14
                     font.family: appFontFamily
+                    renderType: Text.QtRendering
                 }
 
                 // 浏览文件按钮
@@ -1042,6 +1046,7 @@ Item {
                         color: "#666666"
                         font.pixelSize: 13
                         font.family: appFontFamily
+                        renderType: Text.QtRendering
                     }
 
                     MouseArea {
@@ -1150,8 +1155,9 @@ Item {
                     text: qsTr("松开以添加视频文件")
                     color: "#0078D4"
                     font.pixelSize: 15
-                    font.weight: Font.Medium
+                    font.weight: Font.Normal
                     font.family: appFontFamily
+                    renderType: Text.QtRendering
                 }
             }
         }
@@ -1239,11 +1245,12 @@ Item {
                 Layout.fillWidth: true
                 text: dragState.draggedFileName
                 font.pixelSize: 12
-                font.weight: Font.Medium
+                font.weight: Font.Normal
                 font.family: appFontFamily
                 color: "#1a1a1a"
                 elide: Text.ElideRight
                 maximumLineCount: 1
+                renderType: Text.QtRendering
             }
         }
     }

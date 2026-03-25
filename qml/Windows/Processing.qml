@@ -139,16 +139,16 @@ Item {
                 font.pixelSize: 12
                 font.family: appFontFamily
                 color: "#5c6670"
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
             Text {
                 text: statCard.value
                 font.pixelSize: statCard.big ? 22 : 18
                 font.family: appFontFamily
-                font.weight: Font.DemiBold
+                font.weight: Font.Medium
                 color: statCard.valueColor
                 elide: Text.ElideRight
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
             Text {
                 visible: statCard.note.length > 0
@@ -157,7 +157,7 @@ Item {
                 font.family: appFontFamily
                 color: "#8a939d"
                 elide: Text.ElideRight
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
         }
     }
@@ -192,9 +192,9 @@ Item {
             text: btn.text
             font.pixelSize: 13
             font.family: appFontFamily
-            font.weight: Font.DemiBold
+            font.weight: Font.Normal
             color: btn.primary ? "white" : btn.danger ? btn.hovered ? "#a4262c" : "#5e6670" : "#2f343a"
-            renderType: Text.NativeRendering
+            renderType: Text.QtRendering
         }
 
         MouseArea {
@@ -288,7 +288,7 @@ Item {
                         font.family: appFontFamily
                         font.weight: Font.Bold
                         color: root.barColor
-                        renderType: Text.NativeRendering
+                        renderType: Text.QtRendering
                     }
 
                     ColumnLayout {
@@ -301,9 +301,9 @@ Item {
                                   : qsTr("已处理任务 %1").arg(root.displayCurrentCount)
                             font.pixelSize: 13
                             font.family: appFontFamily
-                            font.weight: Font.DemiBold
+                            font.weight: Font.Normal
                             color: "#1f252b"
-                            renderType: Text.NativeRendering
+                            renderType: Text.QtRendering
                         }
                     }
                 }
@@ -416,7 +416,7 @@ Item {
                         font.family: appFontFamily
                         color: "#4e5964"
                         elide: Text.ElideMiddle
-                        renderType: Text.NativeRendering
+                        renderType: Text.QtRendering
 
                         HoverHandler {
                             id: stageTextHover
@@ -436,7 +436,7 @@ Item {
                         font.pixelSize: 12
                         font.family: appFontFamily
                         color: "#6c7783"
-                        renderType: Text.NativeRendering
+                        renderType: Text.QtRendering
                     }
 
                     Text {
@@ -445,7 +445,7 @@ Item {
                         font.pixelSize: 12
                         font.family: appFontFamily
                         color: "#7c8793"
-                        renderType: Text.NativeRendering
+                        renderType: Text.QtRendering
                     }
                 }
 
@@ -732,10 +732,10 @@ Item {
                     text: qsTr("正在获取视频信息")
                     font.pixelSize: 18
                     font.family: appFontFamily
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Medium
                     color: "#1f252b"
                     horizontalAlignment: Text.AlignHCenter
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
 
                 Text {
@@ -743,10 +743,10 @@ Item {
                     text: root.preprocessCountText
                     font.pixelSize: 14
                     font.family: appFontFamily
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Normal
                     color: "#5f6974"
                     horizontalAlignment: Text.AlignHCenter
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
             }
         }

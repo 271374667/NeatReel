@@ -99,13 +99,13 @@ Window {
 
         contentItem: Text {
             text: menuButton.text
-            font.pixelSize: 13
+            font.pixelSize: 12
             font.family: appFontFamily
-            font.weight: Font.Medium
+            font.weight: Font.Normal
             color: "#1f2328"
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
-            renderType: Text.NativeRendering
+            renderType: Text.QtRendering
         }
     }
 

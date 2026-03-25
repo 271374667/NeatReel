@@ -180,7 +180,7 @@ Item {
                 font.weight: Font.Normal
                 color: root.textColor
                 anchors.horizontalCenter: parent.horizontalCenter
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
         }
 
@@ -226,7 +226,7 @@ Item {
                 font.weight: Font.Normal
                 color: "#d83b01"
                 anchors.horizontalCenter: parent.horizontalCenter
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
                 horizontalAlignment: Text.AlignHCenter
             }
         }

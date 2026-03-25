@@ -17,7 +17,9 @@ PY_RESOURCE_FILE = RESOURCE_DIR / "qml_resources.py"
 QRC_PREFIX = "/qml"
 RESOURCE_EXCLUDED_SUFFIXES = {".ts", ".pro"}
 REQUIRED_RESOURCE_FILES = [
-    QML_DIR / "Fonts" / "AlibabaPuHuiTi-3-55-Regular.ttf",
+    QML_DIR / "Fonts" / "SourceHanSansSC-Regular.otf",
+    QML_DIR / "Fonts" / "SourceHanSansSC-Medium.otf",
+    QML_DIR / "Fonts" / "SourceHanSansSC-Bold.otf",
 ]
 
 

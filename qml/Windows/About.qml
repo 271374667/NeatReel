@@ -119,9 +119,9 @@ Window {
                     text: card.titleText
                     font.pixelSize: 18
                     font.family: appFontFamily
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Medium
                     color: "#111827"
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
 
                 Text {
@@ -132,7 +132,7 @@ Window {
                     color: "#667085"
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
             }
 
@@ -142,7 +142,7 @@ Window {
                 font.family: appFontFamily
                 color: "#7c8795"
                 Layout.alignment: Qt.AlignVCenter
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
         }
 
@@ -225,7 +225,7 @@ Window {
                         font.weight: Font.Bold
                         color: "#101828"
                         horizontalAlignment: Text.AlignHCenter
-                        renderType: Text.NativeRendering
+                        renderType: Text.QtRendering
                     }
 
                     Text {
@@ -235,7 +235,7 @@ Window {
                         font.family: appFontFamily
                         color: "#344054"
                         horizontalAlignment: Text.AlignHCenter
-                        renderType: Text.NativeRendering
+                        renderType: Text.QtRendering
                     }
 
                     Text {
@@ -246,7 +246,7 @@ Window {
                         color: "#475467"
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
-                        renderType: Text.NativeRendering
+                        renderType: Text.QtRendering
                     }
                 }
             }
@@ -275,9 +275,9 @@ Window {
                         text: qsTr("开发者：PythonImporter")
                         font.pixelSize: 18
                         font.family: appFontFamily
-                        font.weight: Font.DemiBold
+                        font.weight: Font.Medium
                         color: "#111827"
-                        renderType: Text.NativeRendering
+                        renderType: Text.QtRendering
                     }
 
                     RowLayout {
@@ -289,7 +289,7 @@ Window {
                             font.pixelSize: 15
                             font.family: appFontFamily
                             color: "#475467"
-                            renderType: Text.NativeRendering
+                            renderType: Text.QtRendering
                         }
 
                         LinkIconButton {
@@ -339,7 +339,7 @@ Window {
                 color: "#667085"
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
         }
     }

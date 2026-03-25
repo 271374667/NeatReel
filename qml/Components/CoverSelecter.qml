@@ -125,10 +125,10 @@ Item {
                 text: qsTr("设置封面")
                 font.pixelSize: root.fontSize
                 font.family: appFontFamily
-                font.weight: Font.DemiBold
+                font.weight: Font.Medium
                 color: root.accentColor
                 Layout.alignment: Qt.AlignVCenter
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
         }
     }
@@ -223,10 +223,10 @@ Item {
                         text: qsTr("更改")
                         font.pixelSize: root.fontSize
                         font.family: appFontFamily
-                        font.weight: Font.DemiBold
+                        font.weight: Font.Medium
                         color: root.accentColor
                         Layout.alignment: Qt.AlignVCenter
-                        renderType: Text.NativeRendering
+                        renderType: Text.QtRendering
                     }
                 }
             }
@@ -266,7 +266,7 @@ Item {
                         font.weight: Font.Normal
                         color: clearMa.containsMouse ? root.clearHoverColor : root.clearColor
                         Layout.alignment: Qt.AlignVCenter
-                        renderType: Text.NativeRendering
+                        renderType: Text.QtRendering
 
                         Behavior on color {
                             ColorAnimation { duration: 150; easing.type: Easing.OutCubic }

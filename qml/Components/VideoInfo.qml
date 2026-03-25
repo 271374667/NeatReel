@@ -167,10 +167,10 @@ Item {
                 text: qsTr("视频信息")
                 font.pixelSize: 13
                 font.family: appFontFamily
-                font.weight: Font.DemiBold
+                font.weight: Font.Medium
                 color: root.labelColor
                 anchors.verticalCenter: parent.verticalCenter
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
         }
 
@@ -218,7 +218,7 @@ Item {
                     font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.labelColor
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
 
                 Text {
@@ -231,7 +231,7 @@ Item {
                     elide: Text.ElideMiddle
                     width: parent.width
                     maximumLineCount: 1
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
             }
 
@@ -251,7 +251,7 @@ Item {
                     font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.labelColor
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
 
                 Text {
@@ -264,7 +264,7 @@ Item {
                     elide: Text.ElideMiddle
                     width: parent.width
                     maximumLineCount: 1
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
             }
 
@@ -284,7 +284,7 @@ Item {
                     font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.labelColor
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
 
                 Text {
@@ -297,7 +297,7 @@ Item {
                     elide: Text.ElideRight
                     width: parent.width
                     maximumLineCount: 1
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
             }
 
@@ -312,19 +312,19 @@ Item {
                     font.family: appFontFamily
                     font.weight: Font.Normal
                     color: root.accentColor
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
 
                 Text {
                     text: root.rotationAngle + "°"
                     font.pixelSize: 14
                     font.family: appFontFamily
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Medium
                     color: root.accentColor
                     elide: Text.ElideRight
                     width: parent.width
                     maximumLineCount: 1
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
             }
         }

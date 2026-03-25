@@ -395,17 +395,17 @@ Item {
                 font.pixelSize: 12
                 font.family: appFontFamily
                 color: "#5c6670"
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
 
             Text {
                 text: infoCard.value
                 font.pixelSize: 18
                 font.family: appFontFamily
-                font.weight: Font.DemiBold
+                font.weight: Font.Medium
                 color: infoCard.valueColor
                 elide: Text.ElideRight
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
 
             Text {
@@ -415,7 +415,7 @@ Item {
                 font.family: appFontFamily
                 color: "#8a939d"
                 elide: Text.ElideRight
-                renderType: Text.NativeRendering
+                renderType: Text.QtRendering
             }
         }
     }
@@ -608,9 +608,9 @@ Item {
                             text: root.formatResolution(root.cropWidthValue, root.cropHeightValue)
                             font.pixelSize: 12
                             font.family: appFontFamily
-                            font.weight: Font.DemiBold
+                            font.weight: Font.Medium
                             color: "white"
-                            renderType: Text.NativeRendering
+                            renderType: Text.QtRendering
                         }
                     }
 
@@ -710,7 +710,7 @@ Item {
                     font.pixelSize: 12
                     font.family: appFontFamily
                     color: "#5f6973"
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
 
                 RowLayout {

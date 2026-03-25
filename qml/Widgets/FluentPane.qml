@@ -17,7 +17,7 @@ Item {
     property color iconColor: "#0078D4"           // 图标颜色
     property color shadowColor: "#18000000"       // 阴影颜色
     property int headerHeight: 44                 // 标题栏高度
-    property int titleSize: 13                    // 标题文字大小
+    property int titleSize: 14                    // 标题文字大小
     property int iconSize: 16                     // 图标文字大小
     property int contentTopMargin: 12             // 内容区域上方留白
     property int contentLeftMargin: 16            // 内容区域左侧留白
@@ -141,13 +141,13 @@ Item {
                     text: root.title
                     font.pixelSize: root.titleSize
                     font.family: appFontFamily
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Medium
                     color: root.titleColor
                     elide: Text.ElideRight
                     maximumLineCount: 1
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
 
                 // 右侧弹簧

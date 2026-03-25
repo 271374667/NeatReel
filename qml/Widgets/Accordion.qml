@@ -144,13 +144,13 @@ Item {
                     text: root.title
                     font.pixelSize: root.titleSize
                     font.family: appFontFamily
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Medium
                     color: root.titleColor
                     elide: Text.ElideRight
                     maximumLineCount: 1
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
-                    renderType: Text.NativeRendering
+                    renderType: Text.QtRendering
                 }
             }
 

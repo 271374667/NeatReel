@@ -441,12 +441,12 @@ Item {
 
                             Text {
                                 text: qsTr("画面方向")
-                                font.pixelSize: 13
+                                font.pixelSize: 12
                                 font.family: appFontFamily
-                                font.weight: Font.Medium
-                                color: "#1a1a1a"
+                                font.weight: Font.Normal
+                                color: "#2f343a"
                                 verticalAlignment: Text.AlignVCenter
-                                renderType: Text.NativeRendering
+                                renderType: Text.QtRendering
                             }
 
                             RadioButton {
@@ -498,12 +498,12 @@ Item {
 
                             Text {
                                 text: qsTr("输出视频")
-                                font.pixelSize: 13
+                                font.pixelSize: 12
                                 font.family: appFontFamily
-                                font.weight: Font.Medium
-                                color: "#1a1a1a"
+                                font.weight: Font.Normal
+                                color: "#2f343a"
                                 verticalAlignment: Text.AlignVCenter
-                                renderType: Text.NativeRendering
+                                renderType: Text.QtRendering
                             }
 
                             RadioButton {
@@ -549,7 +549,7 @@ Item {
                                             font.pixelSize: 12
                                             font.family: appFontFamily
                                             color: "#5c6670"
-                                            renderType: Text.NativeRendering
+                                            renderType: Text.QtRendering
                                         }
 
                                         ComboBox {
@@ -602,7 +602,7 @@ Item {
                                             font.pixelSize: 12
                                             font.family: appFontFamily
                                             color: "#5c6670"
-                                            renderType: Text.NativeRendering
+                                            renderType: Text.QtRendering
                                         }
 
                                         Switch {
@@ -628,11 +628,12 @@ Item {
 
                                     Text {
                                         text: qsTr("视频封面")
-                                        font.pixelSize: 13
+                                        font.pixelSize: 12
                                         font.family: appFontFamily
-                                        color: "#1a1a1a"
+                                        font.weight: Font.Normal
+                                        color: "#2f343a"
                                         verticalAlignment: Text.AlignVCenter
-                                        renderType: Text.NativeRendering
+                                        renderType: Text.QtRendering
                                     }
 
                                     Item { Layout.fillWidth: true }
@@ -650,11 +651,12 @@ Item {
 
                                     Text {
                                         text: qsTr("输出文件夹")
-                                        font.pixelSize: 13
+                                        font.pixelSize: 12
                                         font.family: appFontFamily
-                                        color: "#1a1a1a"
+                                        font.weight: Font.Normal
+                                        color: "#2f343a"
                                         verticalAlignment: Text.AlignVCenter
-                                        renderType: Text.NativeRendering
+                                        renderType: Text.QtRendering
                                     }
 
                                     Rectangle {
@@ -676,7 +678,7 @@ Item {
                                             color: "#5c6670"
                                             verticalAlignment: Text.AlignVCenter
                                             elide: Text.ElideMiddle
-                                            renderType: Text.NativeRendering
+                                            renderType: Text.QtRendering
                                         }
                                     }
 
