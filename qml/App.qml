@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.FluentWinUI3
-import QtQuick.Layouts
 import QtQuick.Window
 import "Components"
 import "Windows"
@@ -13,9 +12,11 @@ Window {
     minimumWidth: 600
     minimumHeight: 700
     visible: true
+    flags: Qt.Window | Qt.FramelessWindowHint
     title: qsTr("净影连 NeatReel")
     color: "#f5f7fa"
     readonly property url defaultPreviewFrameSource: ""
+    readonly property int titleBarHeight: 40
     readonly property int homePageIndex: 0
     readonly property int cropPageIndex: 1
     readonly property int processingPageIndex: 2
@@ -82,19 +83,20 @@ Window {
         pendingCropRect = null
     }
 
-    component CompactMenuButton: Button {
+    component TitleBarMenuButton: Button {
         id: menuButton
         flat: true
-        implicitWidth: Math.max(64, contentItem.implicitWidth + leftPadding + rightPadding)
-        implicitHeight: 28
-        leftPadding: 10
-        rightPadding: 10
-        topPadding: 4
-        bottomPadding: 4
+        implicitWidth: Math.max(56, contentItem.implicitWidth + leftPadding + rightPadding)
+        implicitHeight: 24
+        leftPadding: 8
+        rightPadding: 8
+        topPadding: 2
+        bottomPadding: 2
+        hoverEnabled: true
 
         background: Rectangle {
-            radius: 6
-            color: menuButton.down ? "#dbeafe" : (menuButton.hovered ? "#eef4fb" : "transparent")
+            radius: 5
+            color: menuButton.down ? "#dbeafe" : (menuButton.hovered ? "#eef3f9" : "transparent")
         }
 
         contentItem: Text {
@@ -102,48 +104,38 @@ Window {
             font.pixelSize: 12
             font.family: appFontFamily
             font.weight: Font.Normal
-            color: "#1f2328"
+            color: "#4b5563"
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             renderType: Text.QtRendering
         }
     }
 
-    Rectangle {
-        id: compactMenuBar
+    FluentTitleBar {
+        id: titleBar
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        height: 34
-        color: "#f7f8fa"
-        z: 20
-
-        Rectangle {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: 1
-            color: "#d8dee6"
-        }
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 8
-            anchors.rightMargin: 8
-            spacing: 2
-
-            CompactMenuButton {
+        height: root.titleBarHeight
+        appName: root.title
+        logoSource: ImagePath.logo
+        leadingContent: Component {
+            TitleBarMenuButton {
                 id: settingsMenuButton
-                text: qsTr("设置(S)")
+                text: qsTr("设置")
                 onClicked: {
-                    settingsMenu.x = x
-                    settingsMenu.y = compactMenuBar.height - 1
+                    const popupPoint = settingsMenuButton.mapToItem(
+                        null,
+                        0,
+                        settingsMenuButton.height + 8
+                    )
+                    settingsMenu.x = popupPoint.x
+                    settingsMenu.y = popupPoint.y
                     settingsMenu.open()
                 }
             }
-
-            Item { Layout.fillWidth: true }
         }
+        z: 30
     }
 
     Menu {
@@ -226,7 +218,7 @@ Window {
     Item {
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: compactMenuBar.bottom
+        anchors.top: titleBar.bottom
         anchors.bottom: parent.bottom
 
         Home {
