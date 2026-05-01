@@ -1,7 +1,10 @@
 # file: smart_av1_compressor.py
 from pathlib import Path
 from typing import List, Optional, Callable
+import math
+import os
 import subprocess
+import sys
 import av
 import numpy as np
 from scipy.ndimage import laplace as _ndimage_laplace
@@ -28,6 +31,7 @@ class SmartAV1Compressor:
         enable_two_pass: bool = True,
         enable_denoise: bool = True,
         max_threads: int = 8,
+        max_cpu_percent: float = 100.0,
         max_frame_rate: Optional[int] = None,
         max_width: Optional[int] = None,
     ) -> None:
@@ -42,7 +46,10 @@ class SmartAV1Compressor:
             cpu_used_low_res (int): 低/中分辨率 CPU-used。
             enable_two_pass (bool): 是否启用 Two-pass 压缩（默认 True）。
             enable_denoise (bool): 是否启用轻微降噪（hqdn3d）。
-            max_threads (int): FFmpeg 使用的线程数。
+            max_threads (int): FFmpeg 使用的线程数上限。
+            max_cpu_percent (float): CPU 使用率上限（1-100），默认 100 不限制。
+                实际线程数 = min(max_threads, ceil(cpu_count * max_cpu_percent / 100))。
+                低于 100 时 Windows 下同时设置进程优先级为低于正常。
             max_frame_rate (Optional[int]): 最大帧率限制，可选。
             max_width (Optional[int]): 最大分辨率宽度限制，可选。
         """
@@ -54,9 +61,27 @@ class SmartAV1Compressor:
         self.enable_two_pass = enable_two_pass
         self.enable_denoise = enable_denoise
         self.max_threads = max_threads
+        self.max_cpu_percent = max(1.0, min(100.0, max_cpu_percent))
         self.max_frame_rate = max_frame_rate
         self.max_width = max_width
+
+        # 根据 CPU 百分比计算有效线程数
+        cpu_count = os.cpu_count() or 1
+        thread_cap = max(1, math.ceil(cpu_count * self.max_cpu_percent / 100))
+        self._effective_threads = min(max_threads, thread_cap)
+
+        # Windows 下限制 CPU 时降低进程优先级（低于正常），进一步减少对其他任务的抢占
+        self._creation_flags = (
+            subprocess.BELOW_NORMAL_PRIORITY_CLASS
+            if sys.platform == "win32" and self.max_cpu_percent < 100
+            else 0
+        )
+
         self._encoder = self._detect_encoder()
+        logger.info(
+            f"CPU 限制: {self.max_cpu_percent:.0f}% → 有效线程数={self._effective_threads}/{cpu_count} "
+            f"低优先级={'是' if self._creation_flags else '否'}"
+        )
 
     def compress_videos(
         self,
@@ -224,6 +249,8 @@ class SmartAV1Compressor:
                 str(crf),
                 "-b:v",
                 "0",
+                "-threads",
+                str(self._effective_threads),
                 "-svtav1-params",
                 ":".join(svt_params),
             ]
@@ -252,7 +279,7 @@ class SmartAV1Compressor:
                 "-row-mt",
                 "1",
                 "-threads",
-                str(self.max_threads),
+                str(self._effective_threads),
             ]
             if use_grain_synthesis:
                 args += ["-film-grain-noise", "8"]  # 合成胶片颗粒元数据
@@ -314,13 +341,13 @@ class SmartAV1Compressor:
             enc_p1 += ["-passlogfile", passlogfile]
             cmd1 = input_args + ["-vf", vf_filter_str] + enc_p1 + ["-an", "-f", "null", "NUL"]
             logger.debug(f"Pass 1: {' '.join(cmd1)}")
-            subprocess.run(cmd1, check=True)
+            subprocess.run(cmd1, check=True, creationflags=self._creation_flags)
 
             enc_p2 = self._build_encoder_args(crf, cpu_used, 2, use_grain_synthesis)
             enc_p2 += ["-passlogfile", passlogfile]
             cmd2 = input_args + ["-vf", vf_filter_str] + enc_p2 + ["-c:a", "copy", str(output_path)]
             logger.debug(f"Pass 2: {' '.join(cmd2)}")
-            subprocess.run(cmd2, check=True)
+            subprocess.run(cmd2, check=True, creationflags=self._creation_flags)
 
             # 清理 passlog 临时文件
             for suffix in (".passlog-0.log", ".passlog-0.log.mbtree"):
@@ -331,7 +358,7 @@ class SmartAV1Compressor:
             enc = self._build_encoder_args(crf, cpu_used, None, use_grain_synthesis)
             cmd = input_args + ["-vf", vf_filter_str] + enc + ["-c:a", "copy", str(output_path)]
             logger.debug(f"Single-pass: {' '.join(cmd)}")
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, check=True, creationflags=self._creation_flags)
 
         logger.info(f"完成: {output_path}")
         if progress_callback:
@@ -340,4 +367,4 @@ class SmartAV1Compressor:
 
 if __name__ == "__main__":
     compressor = SmartAV1Compressor()
-    compressor.compress_videos([r"G:\Movie\国产\学生\幼不漏上大号.mp4"])
+    compressor.compress_videos([r"G:\Movie\国产\系列\谷鲤里脱衣测评\12.mp4"])
