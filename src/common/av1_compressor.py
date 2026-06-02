@@ -5,7 +5,7 @@ import math
 import os
 import subprocess
 import sys
-import av
+import av 
 import numpy as np
 from scipy.ndimage import laplace as _ndimage_laplace
 from loguru import logger
@@ -26,12 +26,12 @@ class SmartAV1Compressor:
         crf_high_res: int = 28,
         crf_mid_res: int = 30,
         crf_low_res: int = 32,
-        cpu_used_high_res: int = 0,
-        cpu_used_low_res: int = 2,
+        cpu_used_high_res: int = 3,
+        cpu_used_low_res: int = 3,
         enable_two_pass: bool = True,
         enable_denoise: bool = True,
         max_threads: int = 8,
-        max_cpu_percent: float = 100.0,
+        max_cpu_percent: float = 90.0,
         max_frame_rate: Optional[int] = None,
         max_width: Optional[int] = None,
     ) -> None:
@@ -132,7 +132,7 @@ class SmartAV1Compressor:
     ) -> float:
         """
         高级噪点检测：
-          - 采样前 sample_frames 帧
+          - seek 到均匀分布的时间戳采样，避免顺序解码长视频
           - 对每帧进行小块局部方差统计
           - 返回平均噪点值
 
@@ -146,36 +146,40 @@ class SmartAV1Compressor:
         """
         total_noise: list[float] = []
 
+        def _process_frame(frame: av.VideoFrame) -> None:
+            gray: np.ndarray = frame.to_ndarray(format="gray")
+            h, w = gray.shape
+            block_noises: list[float] = []
+            for y in range(0, h, block_size):
+                for x in range(0, w, block_size):
+                    block = gray[y : y + block_size, x : x + block_size]
+                    if block.size == 0:
+                        continue
+                    lap = _ndimage_laplace(block.astype(np.float64))
+                    block_noises.append(float(lap.var()))
+            if block_noises:
+                total_noise.append(float(np.mean(block_noises)))
+
         with av.open(str(video_path)) as container:
             stream = container.streams.video[0]
-            # 跳过非参考帧（B 帧）加速采样，噪点特征在 I/P 帧上已足够
-            stream.codec_context.skip_frame = "NONREF"
+            duration_us = container.duration  # AV_TIME_BASE = 1,000,000 μs
 
-            total_frames = stream.frames or 0
-            step = max(total_frames // sample_frames, 1) if total_frames > 0 else 1
-
-            for frame_idx, frame in enumerate(container.decode(stream)):
-                if frame_idx % step != 0:
-                    continue
-
-                # av 直接输出 gray8 格式，避免额外颜色转换
-                gray: np.ndarray = frame.to_ndarray(format="gray")
-                h, w = gray.shape
-                block_noises: list[float] = []
-
-                for y in range(0, h, block_size):
-                    for x in range(0, w, block_size):
-                        block = gray[y : y + block_size, x : x + block_size]
-                        if block.size == 0:
-                            continue
-                        lap = _ndimage_laplace(block.astype(np.float64))
-                        block_noises.append(float(lap.var()))
-
-                if block_noises:
-                    total_noise.append(float(np.mean(block_noises)))
-
-                if len(total_noise) >= sample_frames:
-                    break
+            if duration_us and duration_us > 0:
+                # 直接 seek 到均匀分布的时间戳，每次只解码一帧
+                # 对长视频（如 10min@30fps）可将采样时间从数分钟压缩到秒级
+                for i in range(sample_frames):
+                    seek_us = int(duration_us * i / sample_frames)
+                    container.seek(seek_us)
+                    for frame in container.decode(stream):
+                        _process_frame(frame)
+                        break  # 每个位置只取最近的一帧
+            else:
+                # 时长未知时退回顺序解码，仅取前 sample_frames 帧
+                stream.codec_context.skip_frame = "NONREF"
+                for frame in container.decode(stream):
+                    _process_frame(frame)
+                    if len(total_noise) >= sample_frames:
+                        break
 
         return float(np.mean(total_noise)) if total_noise else 0.0
 
@@ -339,13 +343,23 @@ class SmartAV1Compressor:
             passlogfile = str(video_path.with_suffix(".passlog"))
             enc_p1 = self._build_encoder_args(crf, cpu_used, 1, use_grain_synthesis)
             enc_p1 += ["-passlogfile", passlogfile]
-            cmd1 = input_args + ["-vf", vf_filter_str] + enc_p1 + ["-an", "-f", "null", "NUL"]
+            cmd1 = (
+                input_args
+                + ["-vf", vf_filter_str]
+                + enc_p1
+                + ["-an", "-f", "null", "NUL"]
+            )
             logger.debug(f"Pass 1: {' '.join(cmd1)}")
             subprocess.run(cmd1, check=True, creationflags=self._creation_flags)
 
             enc_p2 = self._build_encoder_args(crf, cpu_used, 2, use_grain_synthesis)
             enc_p2 += ["-passlogfile", passlogfile]
-            cmd2 = input_args + ["-vf", vf_filter_str] + enc_p2 + ["-c:a", "copy", str(output_path)]
+            cmd2 = (
+                input_args
+                + ["-vf", vf_filter_str]
+                + enc_p2
+                + ["-c:a", "copy", str(output_path)]
+            )
             logger.debug(f"Pass 2: {' '.join(cmd2)}")
             subprocess.run(cmd2, check=True, creationflags=self._creation_flags)
 
@@ -356,7 +370,12 @@ class SmartAV1Compressor:
                     tmp.unlink(missing_ok=True)
         else:
             enc = self._build_encoder_args(crf, cpu_used, None, use_grain_synthesis)
-            cmd = input_args + ["-vf", vf_filter_str] + enc + ["-c:a", "copy", str(output_path)]
+            cmd = (
+                input_args
+                + ["-vf", vf_filter_str]
+                + enc
+                + ["-c:a", "copy", str(output_path)]
+            )
             logger.debug(f"Single-pass: {' '.join(cmd)}")
             subprocess.run(cmd, check=True, creationflags=self._creation_flags)
 
@@ -367,4 +386,4 @@ class SmartAV1Compressor:
 
 if __name__ == "__main__":
     compressor = SmartAV1Compressor()
-    compressor.compress_videos([r"G:\Movie\国产\系列\谷鲤里脱衣测评\12.mp4"])
+    compressor.compress_videos([r"D:\视频\telegram\日本\日本高中生\012高一JK可爱露脸中野美穗子(日本平田市岛根县立平田高等学校)\高一JK可爱露脸中野美穗子(日本平田市岛根县立平田高等学校).mp4"])
