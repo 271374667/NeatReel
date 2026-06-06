@@ -25,6 +25,7 @@ Item {
     property bool preprocessVisible: false
     property int preprocessCurrent: 0
     property int preprocessTotal: 0
+    property string processingWarning: ""
 
     signal cancelRequested()
     signal continueRequested()
@@ -54,6 +55,7 @@ Item {
         function onDisplayStateChanged(v) { root.displayState = v }
         function onFrameSourceChanged(v) { root.frameSource = v }
         function onProjectIdChanged(v) { root.projectId = v }
+        function onProcessingWarningChanged(v) { root.processingWarning = v }
     }
 
     readonly property real tp: Math.max(0.0, Math.min(1.0, totalProgress))
@@ -73,6 +75,7 @@ Item {
                                                 && root.preprocessCurrent < root.preprocessTotal
     readonly property bool showPreprocessOverlay: root.visible && (root.preprocessVisible || root.hasPendingPreprocess)
     readonly property bool isStageTextOverflowing: processingStageText.implicitWidth > processingStageText.width + 0.5
+    readonly property bool hasProcessingWarning: root.processingWarning.length > 0
     property bool stagePathTooltipReady: false
 
     function refreshPreprocessStateFromService() {
@@ -464,6 +467,34 @@ Item {
                         radius: parent.radius
                         color: Qt.rgba(0, 120 / 255, 212 / 255, 0.58)
                         Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: root.hasProcessingWarning ? warningMessage.implicitHeight + 16 : 0
+                    visible: root.hasProcessingWarning
+                    radius: 6
+                    color: "#fff4ce"
+                    border.width: 1
+                    border.color: "#f1c24b"
+                    clip: true
+
+                    Behavior on implicitHeight {
+                        NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                    }
+
+                    Text {
+                        id: warningMessage
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        text: root.processingWarning
+                        font.pixelSize: 12
+                        font.family: appFontFamily
+                        color: "#5f4b00"
+                        elide: Text.ElideRight
+                        verticalAlignment: Text.AlignVCenter
+                        renderType: Text.QtRendering
                     }
                 }
 

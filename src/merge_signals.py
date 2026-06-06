@@ -111,6 +111,10 @@ class MergeSignals(QObject):
     #   不直接推进主/子进度条，只负责把状态切到错误或取消。
     mergeError = Signal(str)
 
+    # 由 VideoMerger 在遇到可恢复问题时发出，例如某个输入文件的音频损坏
+    # 并已降级为静音。它不改变任务状态。
+    mergeWarning = Signal(str)
+
     # 由 VideoMerger 在处理过程中输出预览帧时发出（做了节流，约 300ms 一次）。
     # 连接到 ProcessingService._on_display_frame()。
     # 参数:

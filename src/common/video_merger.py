@@ -53,6 +53,27 @@ class VideoProcessMode(Enum):
 
 
 _PREVIEW_MAX_EDGE = 320
+_AUDIO_PREFLIGHT_PACKET_LIMIT = 24
+_AUDIO_BAD_PACKET_LIMIT = 8
+_AUDIO_CONSECUTIVE_BAD_PACKET_LIMIT = 3
+
+
+@dataclass(frozen=True)
+class _AudioPreflightResult:
+    has_audio: bool
+    usable: bool
+    reason: str = ""
+    codec_name: str = ""
+    sample_rate: int = -1
+
+
+@dataclass
+class _AudioDecodeStatus:
+    bad_packets: int = 0
+    consecutive_bad_packets: int = 0
+    disabled: bool = False
+    warned_bad_packet: bool = False
+    warned_disabled: bool = False
 
 
 def _frame_to_qimage(frame: av.VideoFrame, max_edge: int = _PREVIEW_MAX_EDGE) -> QImage:
@@ -231,7 +252,10 @@ class VideoMerger:
         source_audio_rates: list[int] = [
             int(profile["audio_rate"])
             for profile in profiles
-            if int(profile["audio_rate"]) > 0
+            if (
+                int(profile["audio_rate"]) > 0
+                and profile["audio_preflight"].usable
+            )
         ]
 
         # ===== 确定目标帧率和音频采样率 =====
@@ -339,7 +363,9 @@ class VideoMerger:
                     raise MergeCancelled("已取消")
 
                 input_file = video_info.file_path
+                profile = profiles[file_index]
                 crop_result, effective_rotation = preprocessed[file_index]
+                audio_preflight = profile["audio_preflight"]
 
                 logger.info(
                     f"处理文件 {file_index + 1}/{len(input_files)}: {input_file}"
@@ -352,12 +378,11 @@ class VideoMerger:
                     input_container.close()
                     raise ValueError(f"文件缺少视频流: {input_file}") from exc
 
-                # 音频流可选，缺失时后续会生成静音填充
-                try:
-                    in_audio = input_container.streams.audio[0]
-                except IndexError:
-                    in_audio = None
-                    logger.warning(f"文件缺少音频流，将填充静音: {input_file}")
+                in_audio = self._select_usable_audio_stream(
+                    input_container,
+                    input_file,
+                    audio_preflight,
+                )
 
                 # 多线程解码不影响画质，始终启用
                 in_video.thread_type = "AUTO"
@@ -399,6 +424,7 @@ class VideoMerger:
 
                 segment_video_frame_count = 0
                 segment_audio_sample_count = 0
+                audio_status = _AudioDecodeStatus()
 
                 def _encode_video_frame(frm):
                     nonlocal segment_video_frame_count
@@ -456,9 +482,37 @@ class VideoMerger:
                                 )
 
                     elif packet.stream.type == "audio":
-                        for frame in packet.decode():
-                            for rf in resampler.resample(frame):
-                                _encode_audio_frame(rf)
+                        if audio_status.disabled:
+                            continue
+
+                        try:
+                            decoded_audio_frames = packet.decode()
+                        except av.error.FFmpegError as exc:
+                            self._handle_audio_decode_error(
+                                input_file,
+                                packet,
+                                exc,
+                                audio_status,
+                            )
+                            continue
+
+                        packet_audio_error = False
+                        for frame in decoded_audio_frames:
+                            try:
+                                for rf in resampler.resample(frame):
+                                    _encode_audio_frame(rf)
+                            except av.error.FFmpegError as exc:
+                                self._handle_audio_decode_error(
+                                    input_file,
+                                    packet,
+                                    exc,
+                                    audio_status,
+                                )
+                                packet_audio_error = True
+                                break
+
+                        if not packet_audio_error:
+                            audio_status.consecutive_bad_packets = 0
 
                 # 刷新视频滤镜图中缓冲的剩余帧
                 filter_graph["src"].push(None)
@@ -472,36 +526,34 @@ class VideoMerger:
                     _encode_video_frame(filtered_frame)
 
                 # 刷新音频重采样器中缓冲的剩余采样
-                for rf in resampler.resample(None):
-                    _encode_audio_frame(rf)
-
-                # 如果该片段没有音频轨道，生成静音帧填充对应时长
-                if in_audio is None and segment_video_frame_count > 0:
-                    silence_duration = segment_video_frame_count / effective_fps
-                    silence_samples_needed = int(silence_duration * target_audio_rate)
-                    samples_per_frame = max(
-                        1024, int(out_audio.codec_context.frame_size or 0)
+                try:
+                    for rf in resampler.resample(None):
+                        _encode_audio_frame(rf)
+                except av.error.FFmpegError as exc:
+                    audio_status.disabled = True
+                    self._emit_recoverable_warning(
+                        f"文件 {input_file.name} 的音频重采样刷新失败，"
+                        "剩余部分将用静音补齐。"
                     )
-                    silence_buffer = np.zeros((2, samples_per_frame), dtype="float32")
-                    full_silence_frames, silence_remainder = divmod(
-                        silence_samples_needed, samples_per_frame
+                    logger.warning("音频重采样刷新失败: file={}, error={}", input_file, exc)
+
+                missing_audio_samples = self._fill_missing_segment_audio(
+                    segment_video_frame_count,
+                    segment_audio_sample_count,
+                    target_audio_rate,
+                    target_fps_fraction,
+                    out_audio,
+                    _encode_audio_frame,
+                )
+                if missing_audio_samples > 0:
+                    logger.info(
+                        "已用静音补齐片段音频: file={}, samples={}, "
+                        "video_frames={}, decoded_audio_samples={}",
+                        input_file,
+                        missing_audio_samples,
+                        segment_video_frame_count,
+                        segment_audio_sample_count - missing_audio_samples,
                     )
-
-                    for _ in range(full_silence_frames):
-                        silent_frame = av.AudioFrame.from_ndarray(
-                            silence_buffer, format="fltp", layout="stereo"
-                        )
-                        silent_frame.rate = target_audio_rate
-                        _encode_audio_frame(silent_frame)
-
-                    if silence_remainder > 0:
-                        silent_frame = av.AudioFrame.from_ndarray(
-                            silence_buffer[:, :silence_remainder],
-                            format="fltp",
-                            layout="stereo",
-                        )
-                        silent_frame.rate = target_audio_rate
-                        _encode_audio_frame(silent_frame)
 
                 video_pts_offset += segment_video_frame_count
                 # 将 audio offset 同步到 video offset 的时间线，消除累积漂移
@@ -652,6 +704,13 @@ class VideoMerger:
                 except IndexError:
                     audio_rate = -1
 
+        audio_preflight = self._preflight_audio(input_file)
+        if audio_preflight.has_audio and not audio_preflight.usable:
+            self._emit_recoverable_warning(
+                f"文件 {input_file.name} 的音频预检失败，"
+                f"该片段将使用静音: {audio_preflight.reason}"
+            )
+
         if effective_crop is not None:
             eff_w, eff_h = effective_crop.width, effective_crop.height
         else:
@@ -687,6 +746,7 @@ class VideoMerger:
             "final_height": int(final_h),
             "video_fps": float(video_fps),
             "audio_rate": int(audio_rate),
+            "audio_preflight": audio_preflight,
         }
 
     def _export_single_video(
@@ -705,13 +765,18 @@ class VideoMerger:
         target_width = int(profile["final_width"])
         target_height = int(profile["final_height"])
         source_fps = max(1.0, float(profile["video_fps"]))
+        audio_preflight = profile["audio_preflight"]
         target_fps_fraction = Fraction(str(source_fps)).limit_denominator(1001)
         effective_fps = float(target_fps_fraction)
         video_time_base = Fraction(
             target_fps_fraction.denominator,
             target_fps_fraction.numerator,
         )
-        target_audio_rate = int(profile["audio_rate"]) if int(profile["audio_rate"]) > 0 else 44100
+        target_audio_rate = (
+            int(profile["audio_rate"])
+            if int(profile["audio_rate"]) > 0 and audio_preflight.usable
+            else 44100
+        )
         audio_time_base = Fraction(1, target_audio_rate)
 
         logger.info(
@@ -774,11 +839,11 @@ class VideoMerger:
             except IndexError as exc:
                 raise ValueError(f"文件缺少视频流: {input_file}") from exc
 
-            try:
-                in_audio = input_container.streams.audio[0]
-            except IndexError:
-                in_audio = None
-                logger.warning(f"文件缺少音频流，将填充静音: {input_file}")
+            in_audio = self._select_usable_audio_stream(
+                input_container,
+                input_file,
+                audio_preflight,
+            )
 
             in_video.thread_type = "AUTO"
 
@@ -818,6 +883,7 @@ class VideoMerger:
             segment_audio_sample_count = 0
             last_progress_emit = 0.0
             last_display_emit = 0.0
+            audio_status = _AudioDecodeStatus()
 
             def _encode_video_frame(frm):
                 nonlocal segment_video_frame_count
@@ -871,9 +937,37 @@ class VideoMerger:
                             )
 
                 elif packet.stream.type == "audio":
-                    for frame in packet.decode():
-                        for rf in resampler.resample(frame):
-                            _encode_audio_frame(rf)
+                    if audio_status.disabled:
+                        continue
+
+                    try:
+                        decoded_audio_frames = packet.decode()
+                    except av.error.FFmpegError as exc:
+                        self._handle_audio_decode_error(
+                            input_file,
+                            packet,
+                            exc,
+                            audio_status,
+                        )
+                        continue
+
+                    packet_audio_error = False
+                    for frame in decoded_audio_frames:
+                        try:
+                            for rf in resampler.resample(frame):
+                                _encode_audio_frame(rf)
+                        except av.error.FFmpegError as exc:
+                            self._handle_audio_decode_error(
+                                input_file,
+                                packet,
+                                exc,
+                                audio_status,
+                            )
+                            packet_audio_error = True
+                            break
+
+                    if not packet_audio_error:
+                        audio_status.consecutive_bad_packets = 0
 
             filter_graph["src"].push(None)
             while True:
@@ -885,33 +979,34 @@ class VideoMerger:
                     break
                 _encode_video_frame(filtered_frame)
 
-            for rf in resampler.resample(None):
-                _encode_audio_frame(rf)
-
-            if in_audio is None and segment_video_frame_count > 0:
-                silence_duration = segment_video_frame_count / effective_fps
-                silence_samples_needed = int(silence_duration * target_audio_rate)
-                samples_per_frame = max(1024, int(out_audio.codec_context.frame_size or 0))
-                silence_buffer = np.zeros((2, samples_per_frame), dtype="float32")
-                full_silence_frames, silence_remainder = divmod(
-                    silence_samples_needed, samples_per_frame
+            try:
+                for rf in resampler.resample(None):
+                    _encode_audio_frame(rf)
+            except av.error.FFmpegError as exc:
+                audio_status.disabled = True
+                self._emit_recoverable_warning(
+                    f"文件 {input_file.name} 的音频重采样刷新失败，"
+                    "剩余部分将用静音补齐。"
                 )
+                logger.warning("音频重采样刷新失败: file={}, error={}", input_file, exc)
 
-                for _ in range(full_silence_frames):
-                    silent_frame = av.AudioFrame.from_ndarray(
-                        silence_buffer, format="fltp", layout="stereo"
-                    )
-                    silent_frame.rate = target_audio_rate
-                    _encode_audio_frame(silent_frame)
-
-                if silence_remainder > 0:
-                    silent_frame = av.AudioFrame.from_ndarray(
-                        silence_buffer[:, :silence_remainder],
-                        format="fltp",
-                        layout="stereo",
-                    )
-                    silent_frame.rate = target_audio_rate
-                    _encode_audio_frame(silent_frame)
+            missing_audio_samples = self._fill_missing_segment_audio(
+                segment_video_frame_count,
+                segment_audio_sample_count,
+                target_audio_rate,
+                target_fps_fraction,
+                out_audio,
+                _encode_audio_frame,
+            )
+            if missing_audio_samples > 0:
+                logger.info(
+                    "已用静音补齐片段音频: file={}, samples={}, "
+                    "video_frames={}, decoded_audio_samples={}",
+                    input_file,
+                    missing_audio_samples,
+                    segment_video_frame_count,
+                    segment_audio_sample_count - missing_audio_samples,
+                )
 
             for out_packet in out_video.encode():
                 out_packet.stream = out_video
@@ -991,6 +1086,212 @@ class VideoMerger:
 
         fallback_frames = int(in_video.frames or 0)
         return max(0, fallback_frames)
+
+    @staticmethod
+    def _preflight_audio(input_file: Path) -> _AudioPreflightResult:
+        try:
+            with av.open(str(input_file)) as container:
+                if not container.streams.audio:
+                    return _AudioPreflightResult(
+                        has_audio=False,
+                        usable=False,
+                        reason="文件缺少音频流",
+                    )
+
+                stream = container.streams.audio[0]
+                codec = getattr(stream.codec_context, "codec", None)
+                codec_name = str(
+                    getattr(stream.codec_context, "name", None)
+                    or getattr(codec, "name", "")
+                    or ""
+                )
+                sample_rate = int(stream.rate or stream.codec_context.sample_rate or -1)
+                checked_packets = 0
+
+                for packet in container.demux(stream):
+                    if checked_packets >= _AUDIO_PREFLIGHT_PACKET_LIMIT:
+                        break
+                    checked_packets += 1
+                    try:
+                        packet.decode()
+                    except av.error.FFmpegError as exc:
+                        return _AudioPreflightResult(
+                            has_audio=True,
+                            usable=False,
+                            reason=f"音频预检解码失败: {exc}",
+                            codec_name=codec_name,
+                            sample_rate=sample_rate,
+                        )
+
+                if checked_packets == 0:
+                    return _AudioPreflightResult(
+                        has_audio=True,
+                        usable=False,
+                        reason="音频流没有可读取的 packet",
+                        codec_name=codec_name,
+                        sample_rate=sample_rate,
+                    )
+
+                return _AudioPreflightResult(
+                    has_audio=True,
+                    usable=True,
+                    codec_name=codec_name,
+                    sample_rate=sample_rate,
+                )
+        except av.error.FFmpegError as exc:
+            return _AudioPreflightResult(
+                has_audio=True,
+                usable=False,
+                reason=f"音频预检打开文件失败: {exc}",
+            )
+
+    @staticmethod
+    def _emit_recoverable_warning(message: str) -> None:
+        logger.warning(message)
+        get_merge_signals().mergeWarning.emit(message)
+
+    @staticmethod
+    def _select_usable_audio_stream(
+        input_container: av.container.InputContainer,
+        input_file: Path,
+        audio_preflight: _AudioPreflightResult,
+    ):
+        try:
+            in_audio = input_container.streams.audio[0]
+        except IndexError:
+            logger.warning(f"文件缺少音频流，将填充静音: {input_file}")
+            return None
+
+        if not audio_preflight.usable:
+            logger.warning(
+                "文件音频流预检不可用，将整段填充静音: file={}, reason={}",
+                input_file,
+                audio_preflight.reason or "unknown",
+            )
+            return None
+
+        return in_audio
+
+    @staticmethod
+    def _audio_samples_for_video_frames(
+        frame_count: int,
+        target_audio_rate: int,
+        target_fps_fraction: Fraction,
+    ) -> int:
+        if frame_count <= 0:
+            return 0
+        return int(
+            Fraction(
+                frame_count * target_audio_rate * target_fps_fraction.denominator,
+                target_fps_fraction.numerator,
+            )
+        )
+
+    @staticmethod
+    def _encode_silence_samples(
+        samples_needed: int,
+        target_audio_rate: int,
+        samples_per_frame: int,
+        encode_audio_frame,
+    ) -> None:
+        samples_needed = max(0, int(samples_needed))
+        if samples_needed <= 0:
+            return
+
+        samples_per_frame = max(1, int(samples_per_frame))
+        silence_buffer = np.zeros((2, samples_per_frame), dtype="float32")
+        full_silence_frames, silence_remainder = divmod(
+            samples_needed,
+            samples_per_frame,
+        )
+
+        for _ in range(full_silence_frames):
+            silent_frame = av.AudioFrame.from_ndarray(
+                silence_buffer,
+                format="fltp",
+                layout="stereo",
+            )
+            silent_frame.rate = target_audio_rate
+            encode_audio_frame(silent_frame)
+
+        if silence_remainder > 0:
+            silent_frame = av.AudioFrame.from_ndarray(
+                silence_buffer[:, :silence_remainder],
+                format="fltp",
+                layout="stereo",
+            )
+            silent_frame.rate = target_audio_rate
+            encode_audio_frame(silent_frame)
+
+    @classmethod
+    def _fill_missing_segment_audio(
+        cls,
+        segment_video_frame_count: int,
+        segment_audio_sample_count: int,
+        target_audio_rate: int,
+        target_fps_fraction: Fraction,
+        out_audio,
+        encode_audio_frame,
+    ) -> int:
+        expected_samples = cls._audio_samples_for_video_frames(
+            segment_video_frame_count,
+            target_audio_rate,
+            target_fps_fraction,
+        )
+        missing_samples = max(0, expected_samples - segment_audio_sample_count)
+        if missing_samples <= 0:
+            return 0
+
+        samples_per_frame = max(1024, int(out_audio.codec_context.frame_size or 0))
+        cls._encode_silence_samples(
+            missing_samples,
+            target_audio_rate,
+            samples_per_frame,
+            encode_audio_frame,
+        )
+        return missing_samples
+
+    @staticmethod
+    def _packet_debug_info(packet: av.Packet) -> str:
+        return (
+            f"pts={packet.pts}, dts={packet.dts}, "
+            f"duration={packet.duration}, size={getattr(packet, 'size', None)}"
+        )
+
+    @classmethod
+    def _handle_audio_decode_error(
+        cls,
+        input_file: Path,
+        packet: av.Packet,
+        exc: av.error.FFmpegError,
+        status: _AudioDecodeStatus,
+    ) -> None:
+        status.bad_packets += 1
+        status.consecutive_bad_packets += 1
+
+        logger.warning(
+            "音频 packet 解码失败，已跳过: file={}, {}, error={}",
+            input_file,
+            cls._packet_debug_info(packet),
+            exc,
+        )
+        if not status.warned_bad_packet:
+            get_merge_signals().mergeWarning.emit(
+                f"文件 {input_file.name} 的音频流存在损坏包，已跳过并继续处理。"
+            )
+            status.warned_bad_packet = True
+
+        if (
+            status.bad_packets >= _AUDIO_BAD_PACKET_LIMIT
+            or status.consecutive_bad_packets >= _AUDIO_CONSECUTIVE_BAD_PACKET_LIMIT
+        ):
+            status.disabled = True
+            if not status.warned_disabled:
+                cls._emit_recoverable_warning(
+                    f"文件 {input_file.name} 的音频连续解码失败，"
+                    "剩余音频将用静音补齐。"
+                )
+                status.warned_disabled = True
 
     @staticmethod
     def _needs_rotation(width: int, height: int, orientation: Orientation) -> bool:

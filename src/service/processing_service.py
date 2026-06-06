@@ -229,6 +229,7 @@ class ProcessingService(QObject):
     displayStateChanged = Signal(int)
     frameSourceChanged = Signal(str)
     projectIdChanged = Signal(str)
+    processingWarningChanged = Signal(str)
 
     @Property(bool, notify=preprocessVisibleChanged)
     def preprocessVisible(self) -> bool:
@@ -241,6 +242,10 @@ class ProcessingService(QObject):
     @Property(int, notify=preprocessTotalChanged)
     def preprocessTotal(self) -> int:
         return self._preprocess_total
+
+    @Property(str, notify=processingWarningChanged)
+    def processingWarning(self) -> str:
+        return self._processing_warning
 
     @staticmethod
     def _tr(text: str) -> str:
@@ -305,6 +310,7 @@ class ProcessingService(QObject):
         self._preprocess_visible = False
         self._preprocess_current = 0
         self._preprocess_total = 0
+        self._processing_warning = ""
 
         # Speed tracking (sliding window)
         self._speed_samples: deque[tuple[float, int]] = deque(maxlen=30)
@@ -320,6 +326,7 @@ class ProcessingService(QObject):
         signals.fileFinished.connect(self._on_file_finished)
         signals.mergeFinished.connect(self._on_merge_finished)
         signals.mergeError.connect(self._on_merge_error)
+        signals.mergeWarning.connect(self._on_merge_warning)
         signals.displayFrameReady.connect(self._on_display_frame)
 
     # ── slots (called from QML) ──────────────────────────────────
@@ -360,6 +367,7 @@ class ProcessingService(QObject):
         self._set_preprocess_total(len(video_items))
         self._set_preprocess_current(0)
         self._set_preprocess_visible(bool(video_items))
+        self._set_processing_warning("")
 
         self.processingStatusChanged.emit(0)
         self.totalProgressChanged.emit(0.0)
@@ -409,6 +417,7 @@ class ProcessingService(QObject):
         self._set_preprocess_visible(False)
         self._set_preprocess_current(0)
         self._set_preprocess_total(0)
+        self._set_processing_warning("")
 
     # ── MergeSignals handlers ────────────────────────────────────
 
@@ -509,6 +518,10 @@ class ProcessingService(QObject):
             self.stageNameChanged.emit(self._tr("错误"))
             logger.error(f"Merge error: {message}")
 
+    def _on_merge_warning(self, message: str) -> None:
+        self._set_processing_warning(message)
+        logger.warning(f"Merge warning: {message}")
+
     def _on_display_frame(self, qimage: QImage) -> None:
         self._frame_counter += 1
         image_id = f"proc_{self._frame_counter}"
@@ -534,6 +547,12 @@ class ProcessingService(QObject):
         if self._preprocess_total != total:
             self._preprocess_total = total
             self.preprocessTotalChanged.emit(total)
+
+    def _set_processing_warning(self, message: str) -> None:
+        message = str(message or "")
+        if self._processing_warning != message:
+            self._processing_warning = message
+            self.processingWarningChanged.emit(message)
 
     def _update_elapsed(self) -> None:
         elapsed = monotonic() - self._start_time
