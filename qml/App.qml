@@ -296,5 +296,15 @@ Window {
             }
         }
     }
+
+    // Window border — clearly visible edge to distinguish from other windows
+    // Hidden when maximized (no need for border when window fills screen)
+    Rectangle {
+        anchors.fill: parent
+        color: "transparent"
+        border.color: root.visibility === Window.Maximized ? "transparent" : "#b4bcc8"
+        border.width: root.visibility === Window.Maximized ? 0 : 1
+        z: 200
+    }
 }
 

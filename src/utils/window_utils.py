@@ -5,6 +5,68 @@ import subprocess
 from ctypes import wintypes
 from pathlib import Path
 
+import ctypes.wintypes as _wt
+
+
+class DWMShadow:
+    """Enables native Windows DWM drop-shadow for a frameless window.
+
+    Uses DwmSetWindowAttribute with DWMWA_NCRENDERING_POLICY and
+    SetClassLongPtr with CS_DROPSHADOW to add a visible shadow border
+    around a Qt frameless window, making it distinguishable from the
+    desktop and other white-background windows.
+    """
+
+    # DWM window attribute constants
+    _DWMWA_NCRENDERING_POLICY = 2
+    _DWMNCRP_ENABLED = 2
+
+    # Window class style constant
+    _CS_DROPSHADOW = 0x00020000
+
+    # SetClassLongPtr index
+    _GCLP_STYLE = -26
+
+    _dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
+    _user32 = ctypes.WinDLL("user32", use_last_error=True)
+
+    @classmethod
+    def enable_shadow(cls, window_handle: int) -> None:
+        """Enable DWM shadow on the given window handle (HWND)."""
+        if not window_handle:
+            return
+
+        # Enable NC rendering policy so DWM draws the window frame shadow
+        cls._dwmapi.DwmSetWindowAttribute.argtypes = (
+            _wt.HWND,          # hwnd
+            ctypes.c_uint32,   # dwAttribute
+            ctypes.c_void_p,   # pvAttribute
+            ctypes.c_uint32,   # cbAttribute
+        )
+        cls._dwmapi.DwmSetWindowAttribute.restype = ctypes.c_int32  # HRESULT
+
+        policy = cls._DWMNCRP_ENABLED
+        cls._dwmapi.DwmSetWindowAttribute(
+            window_handle,
+            cls._DWMWA_NCRENDERING_POLICY,
+            ctypes.byref(ctypes.c_int32(policy)),
+            ctypes.sizeof(ctypes.c_int32),
+        )
+
+        # Add CS_DROPSHADOW to the window class style for a subtle shadow
+        cls._user32.GetClassLongPtrW.argtypes = (_wt.HWND, ctypes.c_int32)
+        cls._user32.GetClassLongPtrW.restype = ctypes.c_void_p
+
+        cls._user32.SetClassLongPtrW.argtypes = (_wt.HWND, ctypes.c_int32, ctypes.c_void_p)
+        cls._user32.SetClassLongPtrW.restype = ctypes.c_void_p
+
+        current_style = cls._user32.GetClassLongPtrW(window_handle, cls._GCLP_STYLE)
+        cls._user32.SetClassLongPtrW(
+            window_handle,
+            cls._GCLP_STYLE,
+            current_style | cls._CS_DROPSHADOW,
+        )
+
 
 class WindowUtils:
     MESSAGE_BOX_OK = 0x00000000

@@ -17,8 +17,8 @@ Item {
     property url restoreIconSource
     property url closeIconSource
     property int barHeight: 40
-    property int resizeMargin: 5
-    property int resizeCornerSize: 10
+    property int resizeMargin: 6
+    property int resizeCornerSize: 12
 
     readonly property bool isDark: false
     readonly property bool isMaximized: root.window && root.window.visibility === Window.Maximized
