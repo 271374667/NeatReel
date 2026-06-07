@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
-from PySide6.QtCore import Property, QObject, QThread, QUrl, Signal, Slot
+from PySide6.QtCore import Property, QCoreApplication, QObject, QThread, QUrl, Signal, Slot
 from PySide6.QtGui import QImage
 
 from src.core.paths import OUTPUT_DIR
@@ -33,6 +33,28 @@ def _load_video_info_reader_classes() -> tuple[type, type]:
     from src.common.video_info_reader import CropResult, VideoInfoReader
 
     return CropResult, VideoInfoReader
+
+
+class _VideoInfoWarmupWorker(QThread):
+    """后台预热视频信息读取依赖，避免首次点击承担模块冷启动成本。"""
+
+    def run(self) -> None:
+        try:
+            _, video_info_reader_cls = _load_video_info_reader_classes()
+            reader = video_info_reader_cls()
+            _ = reader.detect_short_edge
+
+            try:
+                from src.common.video_info_reader import _get_cached_font
+
+                _get_cached_font(16)
+            except Exception:
+                logger.opt(exception=True).debug("视频预热字体缓存失败，延后到首次缩略图生成")
+
+            logger.debug("视频信息读取依赖预热完成")
+        except Exception:
+            logger.opt(exception=True).debug("视频信息读取依赖预热失败，延后到首次请求")
+
 
 # ── thumbnail worker ─────────────────────────────────────────────
 class _ThumbnailWorker(QThread):
@@ -212,6 +234,11 @@ class HomeService(QObject):
         self._thumb_request_id = 0
         self._thumb_counter = 0
         self._workers: list[QThread] = []
+        self._warmup_worker: QThread | None = None
+        app = QCoreApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._stop_warmup)
+        self._start_warmup()
 
     def _get_default_output_directory(self) -> str:
         return str(OUTPUT_DIR.resolve())
@@ -223,6 +250,27 @@ class HomeService(QObject):
     )
 
     # ── private helpers ──────────────────────────────────────────
+    def _start_warmup(self) -> None:
+        if self._warmup_worker is not None and self._warmup_worker.isRunning():
+            return
+
+        worker = _VideoInfoWarmupWorker()
+        worker.finished.connect(self._on_warmup_finished)
+        worker.start()
+        self._warmup_worker = worker
+
+    def _on_warmup_finished(self) -> None:
+        self._warmup_worker = None
+
+    def _stop_warmup(self) -> None:
+        worker = self._warmup_worker
+        if worker is None:
+            return
+
+        if worker.isRunning():
+            worker.wait()
+        self._warmup_worker = None
+
     def _cleanup_workers(self) -> None:
         self._workers = [w for w in self._workers if w.isRunning()]
 

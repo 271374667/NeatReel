@@ -22,6 +22,10 @@ Item {
     property bool showingOriginal: false
     property bool globalAutoCropEnabled: true
     property int previewDisplayState: DisplayScreen.State.Waiting
+    readonly property int defaultPreviewLoadingTimeoutMs: 10000
+    readonly property int firstPreviewLoadingTimeoutMs: 30000
+    property bool firstPreviewTimeoutAvailable: true
+    property bool firstPreviewTimeoutActive: false
     property var currentCropRect: ({})
     property int selectedManualRotationAngle: 0
     property bool selectedManualRotationEdited: false
@@ -54,6 +58,10 @@ Item {
             else if (state === 1) displayScreen.setLoading()
             else if (state === 2) displayScreen.setNormal()
             else if (state === 3) displayScreen.setError("")
+
+            if (state !== 1) {
+                root.restorePreviewLoadingTimeout()
+            }
         }
 
         function onThumbnailReady(imageUrl) {
@@ -87,6 +95,7 @@ Item {
         function onErrorOccurred(message) {
             root.previewFrameSource = ""
             displayScreen.setError(message)
+            root.restorePreviewLoadingTimeout()
         }
     }
 
@@ -112,6 +121,42 @@ Item {
         return dropList.getItemAutoCropEnabled(dropList.currentIndex)
     }
 
+    function preparePreviewLoadingTimeout() {
+        if (firstPreviewTimeoutAvailable) {
+            displayScreen.loadingTimeoutMs = firstPreviewLoadingTimeoutMs
+            firstPreviewTimeoutAvailable = false
+            firstPreviewTimeoutActive = true
+            return
+        }
+
+        if (!firstPreviewTimeoutActive) {
+            displayScreen.loadingTimeoutMs = defaultPreviewLoadingTimeoutMs
+        }
+    }
+
+    function restorePreviewLoadingTimeout() {
+        if (!firstPreviewTimeoutActive)
+            return
+
+        displayScreen.loadingTimeoutMs = defaultPreviewLoadingTimeoutMs
+        firstPreviewTimeoutActive = false
+    }
+
+    function requestGridPreview(filePath, rotationAngle, isLandscape, useAutoCrop, manuallyEdited, cropData) {
+        if (!homeService)
+            return
+
+        preparePreviewLoadingTimeout()
+        homeService.onVideoItemClicked(
+            filePath,
+            rotationAngle,
+            isLandscape,
+            useAutoCrop,
+            manuallyEdited,
+            cropData
+        )
+    }
+
     function syncSelectedAutoCropState() {
         showingOriginal = !currentAutoCropEnabled()
     }
@@ -134,7 +179,7 @@ Item {
         var manualRotation = manuallyEdited
             ? normalizeStoredRotation(selectedManualRotationAngle, selectedManualRotationEdited)
             : 0
-        homeService.onVideoItemClicked(
+        requestGridPreview(
             videoInfoItem.filePath,
             manualRotation,
             landscapeRadio.checked,
@@ -266,7 +311,7 @@ Item {
                         // 未手动编辑时，发送 0° 让后端自动检测，避免旧的自动检测结果累加
                         var angleToSend = root.selectedManualRotationEdited
                             ? root.selectedManualRotationAngle : 0
-                        homeService.onVideoItemClicked(
+                        root.requestGridPreview(
                             data.filePath,
                             angleToSend,
                             landscapeRadio.checked,
@@ -335,6 +380,15 @@ Item {
                             Layout.preferredHeight: Math.max(180, width * 9 / 16)
 
                             frameSource: root.previewFrameSource
+
+                            onDisplayStateChanged: {
+                                if (displayState !== DisplayScreen.State.Loading) {
+                                    root.restorePreviewLoadingTimeout()
+                                }
+                                if (displayState === DisplayScreen.State.Error) {
+                                    root.previewDisplayState = DisplayScreen.State.Error
+                                }
+                            }
                         }
 
                         // ── 预览去黑边效果（切换按钮） ──
