@@ -11,24 +11,36 @@ import ctypes.wintypes as _wt
 class DWMShadow:
     """Enables native Windows DWM drop-shadow for a frameless window.
 
-    Uses DwmSetWindowAttribute with DWMWA_NCRENDERING_POLICY and
-    SetClassLongPtr with CS_DROPSHADOW to add a visible shadow border
-    around a Qt frameless window, making it distinguishable from the
-    desktop and other white-background windows.
+    Uses DwmSetWindowAttribute to enable NC rendering, then calls
+    DwmExtendFrameIntoClientArea with 1px margins on all sides so that
+    DWM draws its native drop-shadow around the window even though the
+    window was created with WS_POPUP (Qt::FramelessWindowHint).
+
+    CS_DROPSHADOW is intentionally NOT used here because it is a window-
+    class style that must be set before the HWND is created; setting it
+    afterwards via SetClassLongPtrW has no visible effect.
     """
 
     # DWM window attribute constants
     _DWMWA_NCRENDERING_POLICY = 2
     _DWMNCRP_ENABLED = 2
 
-    # Window class style constant
-    _CS_DROPSHADOW = 0x00020000
-
-    # SetClassLongPtr index
-    _GCLP_STYLE = -26
+    # SetWindowPos flags
+    _SWP_NOMOVE       = 0x0002
+    _SWP_NOSIZE       = 0x0001
+    _SWP_NOZORDER     = 0x0004
+    _SWP_FRAMECHANGED = 0x0020
 
     _dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
     _user32 = ctypes.WinDLL("user32", use_last_error=True)
+
+    class _MARGINS(ctypes.Structure):
+        _fields_ = [
+            ("cxLeftWidth",    ctypes.c_int),
+            ("cxRightWidth",   ctypes.c_int),
+            ("cyTopHeight",    ctypes.c_int),
+            ("cyBottomHeight", ctypes.c_int),
+        ]
 
     @classmethod
     def enable_shadow(cls, window_handle: int) -> None:
@@ -36,35 +48,53 @@ class DWMShadow:
         if not window_handle:
             return
 
-        # Enable NC rendering policy so DWM draws the window frame shadow
+        # Step 1 — let DWM manage NC rendering for this window
         cls._dwmapi.DwmSetWindowAttribute.argtypes = (
-            _wt.HWND,          # hwnd
-            ctypes.c_uint32,   # dwAttribute
-            ctypes.c_void_p,   # pvAttribute
-            ctypes.c_uint32,   # cbAttribute
+            _wt.HWND,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+            ctypes.c_uint32,
         )
-        cls._dwmapi.DwmSetWindowAttribute.restype = ctypes.c_int32  # HRESULT
+        cls._dwmapi.DwmSetWindowAttribute.restype = ctypes.c_int32
 
-        policy = cls._DWMNCRP_ENABLED
         cls._dwmapi.DwmSetWindowAttribute(
             window_handle,
             cls._DWMWA_NCRENDERING_POLICY,
-            ctypes.byref(ctypes.c_int32(policy)),
+            ctypes.byref(ctypes.c_int32(cls._DWMNCRP_ENABLED)),
             ctypes.sizeof(ctypes.c_int32),
         )
 
-        # Add CS_DROPSHADOW to the window class style for a subtle shadow
-        cls._user32.GetClassLongPtrW.argtypes = (_wt.HWND, ctypes.c_int32)
-        cls._user32.GetClassLongPtrW.restype = ctypes.c_void_p
+        # Step 2 — extend the invisible DWM frame 1 px on every side.
+        # DWM draws the drop-shadow around the extended frame region,
+        # which makes the shadow visible for WS_POPUP frameless windows.
+        cls._dwmapi.DwmExtendFrameIntoClientArea.argtypes = (
+            _wt.HWND,
+            ctypes.POINTER(cls._MARGINS),
+        )
+        cls._dwmapi.DwmExtendFrameIntoClientArea.restype = ctypes.c_int32
 
-        cls._user32.SetClassLongPtrW.argtypes = (_wt.HWND, ctypes.c_int32, ctypes.c_void_p)
-        cls._user32.SetClassLongPtrW.restype = ctypes.c_void_p
-
-        current_style = cls._user32.GetClassLongPtrW(window_handle, cls._GCLP_STYLE)
-        cls._user32.SetClassLongPtrW(
+        margins = cls._MARGINS(1, 1, 1, 1)
+        cls._dwmapi.DwmExtendFrameIntoClientArea(
             window_handle,
-            cls._GCLP_STYLE,
-            current_style | cls._CS_DROPSHADOW,
+            ctypes.byref(margins),
+        )
+
+        # Step 3 — notify Windows that the frame geometry changed so the
+        # shadow is applied immediately without waiting for a repaint.
+        cls._user32.SetWindowPos.argtypes = (
+            _wt.HWND,
+            _wt.HWND,
+            ctypes.c_int, ctypes.c_int,
+            ctypes.c_int, ctypes.c_int,
+            ctypes.c_uint,
+        )
+        cls._user32.SetWindowPos.restype = _wt.BOOL
+
+        cls._user32.SetWindowPos(
+            window_handle,
+            None,
+            0, 0, 0, 0,
+            cls._SWP_NOMOVE | cls._SWP_NOSIZE | cls._SWP_NOZORDER | cls._SWP_FRAMECHANGED,
         )
 
 
