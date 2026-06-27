@@ -302,7 +302,7 @@ Window {
     Rectangle {
         anchors.fill: parent
         color: "transparent"
-        border.color: root.visibility === Window.Maximized ? "transparent" : "#b4bcc8"
+        border.color: root.visibility === Window.Maximized ? "transparent" : "#a0acbc"
         border.width: root.visibility === Window.Maximized ? 0 : 1
         z: 200
     }

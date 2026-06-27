@@ -12,10 +12,10 @@ Item {
     property real cornerRadius: 8                 // 圆角半径
     property real shadowRadius: 16                // 阴影模糊半径
     property color backgroundColor: "#ffffff"     // 面板背景色
-    property color borderColor: "#e8e8e8"         // 边框颜色
+    property color borderColor: "#d6dde5"         // 边框颜色
     property color titleColor: "#1a1a1a"          // 标题文字颜色
     property color iconColor: "#0078D4"           // 图标颜色
-    property color shadowColor: "#18000000"       // 阴影颜色
+    property color shadowColor: "#22000000"       // 阴影颜色
     property int headerHeight: 44                 // 标题栏高度
     property int titleSize: 14                    // 标题文字大小
     property int iconSize: 16                     // 图标文字大小
@@ -58,7 +58,7 @@ Item {
             anchors.margins: -2
             radius: root.cornerRadius + 3
             color: "transparent"
-            border.color: Qt.rgba(0, 0, 0, 0.04)
+            border.color: Qt.rgba(0, 0, 0, 0.08)
             border.width: 1
             z: -1
         }
@@ -67,7 +67,7 @@ Item {
             anchors.margins: -4
             radius: root.cornerRadius + 5
             color: "transparent"
-            border.color: Qt.rgba(0, 0, 0, 0.025)
+            border.color: Qt.rgba(0, 0, 0, 0.05)
             border.width: 1
             z: -2
         }
@@ -76,7 +76,7 @@ Item {
             anchors.margins: -7
             radius: root.cornerRadius + 8
             color: "transparent"
-            border.color: Qt.rgba(0, 0, 0, 0.015)
+            border.color: Qt.rgba(0, 0, 0, 0.025)
             border.width: 1
             z: -3
         }

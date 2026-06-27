@@ -27,7 +27,7 @@ Item {
     property url frameSource: ""            // 后端传来的画面 source（image:// 或 file:// 等）
     property real cornerRadius: 8           // 圆角半径
     property color backgroundColor: "#f3f3f3"  // 卡片背景
-    property color borderColor: "#e8e8e8"      // 边框颜色
+    property color borderColor: "#d6dde5"      // 边框颜色
     property color placeholderBg: "#1a1a1a"    // Normal 状态无图时的黑屏背景
     property int iconSize: 96                  // 状态图标尺寸
     property int textSize: 18                  // 提示文字大小
@@ -84,7 +84,7 @@ Item {
         anchors.margins: -1
         radius: root.cornerRadius + 1
         color: "transparent"
-        border.color: Qt.rgba(0, 0, 0, 0.09)
+        border.color: Qt.rgba(0, 0, 0, 0.08)
         border.width: 1
 
         Rectangle {
@@ -92,7 +92,7 @@ Item {
             anchors.margins: -2
             radius: root.cornerRadius + 3
             color: "transparent"
-            border.color: Qt.rgba(0, 0, 0, 0.04)
+            border.color: Qt.rgba(0, 0, 0, 0.05)
             border.width: 1
             z: -1
         }
@@ -101,7 +101,7 @@ Item {
             anchors.margins: -4
             radius: root.cornerRadius + 5
             color: "transparent"
-            border.color: Qt.rgba(0, 0, 0, 0.025)
+            border.color: Qt.rgba(0, 0, 0, 0.03)
             border.width: 1
             z: -2
         }

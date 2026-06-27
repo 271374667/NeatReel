@@ -11,6 +11,7 @@ from src.common.logging_setup import ensure_app_logger_configured
 from src.common.language_manager import LanguageManager
 from src.common.single_instance_guard import NeatReelSingleInstanceGuard
 from src.core.paths import LOGO_FILE, PROJECT_ROOT
+from src.utils.window_utils import DWMShadow
 from src.image_provider import ThumbnailImageProvider
 from src.resources.runtime_resources import ensure_qml_resources_registered
 from src.service.about_service import AboutService
@@ -138,6 +139,11 @@ def main(*, debug: bool = DEBUG) -> None:
     if not engine.rootObjects():
         logger.error("QML root objects are missing, startup failed")
         sys.exit(-1)
+
+    # Enable native Windows DWM shadow for frameless window
+    root_window = engine.rootObjects()[0]
+    window_handle = int(root_window.winId())
+    DWMShadow.enable_shadow(window_handle)
 
     logger.info("NeatReel started successfully")
     QTimer.singleShot(0, close_pyinstaller_splash)

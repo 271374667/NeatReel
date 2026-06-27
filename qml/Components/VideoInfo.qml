@@ -33,7 +33,7 @@ Item {
     // ── 样式属性 ──
     property real  cornerRadius: 8
     property color backgroundColor: "#ffffff"
-    property color borderColor: "#e8e8e8"
+    property color borderColor: "#d6dde5"
     property color labelColor: "#5c6670"             // 标签文字颜色（灰色）
     property color valueColor: "#1a1a1a"             // 值文字颜色（深色）
     property color accentColor: "#0078D4"            // 强调色（旋转角度高亮）
@@ -86,7 +86,7 @@ Item {
         anchors.margins: -1
         radius: root.cornerRadius + 1
         color: "transparent"
-        border.color: Qt.rgba(0, 0, 0, 0.09)
+        border.color: Qt.rgba(0, 0, 0, 0.08)
         border.width: 1
 
         Rectangle {
@@ -94,7 +94,7 @@ Item {
             anchors.margins: -2
             radius: root.cornerRadius + 3
             color: "transparent"
-            border.color: Qt.rgba(0, 0, 0, 0.04)
+            border.color: Qt.rgba(0, 0, 0, 0.05)
             border.width: 1
             z: -1
         }
@@ -103,7 +103,7 @@ Item {
             anchors.margins: -4
             radius: root.cornerRadius + 5
             color: "transparent"
-            border.color: Qt.rgba(0, 0, 0, 0.025)
+            border.color: Qt.rgba(0, 0, 0, 0.03)
             border.width: 1
             z: -2
         }
